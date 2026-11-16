@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>コマ語り 話ごと感想帳</title>
+<meta name="description" content="漫画の話ごとに感想と★評価を言い合える非公式の感想帳">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: 気軽な読者同士のおしゃべり帳。にぎやかすぎず、読みやすく。
+IDEA: 漫画の原稿用紙とコマ割り。話数はコマ、感想は吹き出し。
+PICTURE: 話数グリッド(感想数で墨の濃さが変わるコマ)と吹き出し型の感想。
+COLOUR and TYPE: 原稿用紙の白、墨 #1b1b22、朱 #e2402c をひとつ。Dela Gothic One + Zen Kaku Gothic New。
+LAYOUT: 上部に細い帯、1カラム最大880px、スマホ優先。
+*/
+:root{color-scheme:light dark;--bg:light-dark(#fbfaf6,#15151b);--ink:light-dark(#1b1b22,#ecebe6);--sub:light-dark(#62616b,#a4a3ad);--line:light-dark(#1b1b22,#ecebe6);--soft:light-dark(#efede5,#22222b);--card:light-dark(#fff,#1c1c24);--red:#e2402c;--tone:light-dark(#1b1b22,#ecebe6)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Zen Kaku Gothic New",system-ui,sans-serif;overflow-x:clip}
+header{border-bottom:3px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:5}
+.hd{max-width:880px;margin:auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.logo{font:24px/1 "Dela Gothic One",sans-serif;color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:8px}
+.logo i{display:inline-block;width:22px;height:22px;background:var(--red);border:3px solid var(--line);transform:rotate(-6deg)}
+.hd small{color:var(--sub);font-size:13px;margin-left:auto;text-align:right}
+main{max-width:880px;margin:auto;padding:20px 16px 80px}
+h1{font:clamp(26px,6vw,40px)/1.15 "Dela Gothic One",sans-serif;margin:6px 0 10px;text-wrap:balance}
+h2{font:20px/1.3 "Dela Gothic One",sans-serif;margin:28px 0 10px}
+.muted{color:var(--sub);font-size:14px}
+input,textarea,select{font:16px "Zen Kaku Gothic New",sans-serif;color:var(--ink);background:var(--card);border:2px solid var(--line);border-radius:8px;padding:10px 12px;width:100%;min-height:44px}
+textarea{min-height:110px;resize:vertical}
+input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button{font:700 15px "Zen Kaku Gothic New",sans-serif;min-height:44px;padding:0 18px;border-radius:8px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.pri{background:var(--ink);color:var(--bg)}
+button.red{background:var(--red);color:#fff;border-color:var(--line)}
+button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>input{flex:1 1 200px}
+.note{border:2px dashed var(--sub);border-radius:10px;padding:12px 14px;color:var(--sub);font-size:14px;margin:14px 0}
+.works{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));margin-top:14px}
+.work{display:block;text-decoration:none;color:var(--ink);background:var(--card);border:3px solid var(--line);border-radius:4px;padding:14px;box-shadow:5px 5px 0 var(--line);transition:transform .12s}
+.work:hover{transform:translate(-2px,-2px)}
+.work b{display:block;font-size:18px;line-height:1.35;margin-bottom:6px}
+.work span{font-size:13px;color:var(--sub)}
+.back{display:inline-flex;align-items:center;min-height:44px;color:var(--sub);text-decoration:none;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:12px}
+.ep{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1/1;border:2px solid var(--line);text-decoration:none;color:var(--ink);background:var(--card);font-weight:700;font-size:18px;line-height:1.1}
+.ep small{font-size:12px;font-weight:500;color:var(--sub);margin-top:3px}
+.ep.h1{background:color-mix(in srgb,var(--tone) 14%,var(--card))}
+.ep.h2{background:color-mix(in srgb,var(--tone) 32%,var(--card))}
+.ep.h3{background:var(--tone);color:var(--bg)}.ep.h3 small{color:var(--bg)}
+.ep.new::after{content:"";position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:var(--red)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--sub);margin-top:8px}
+.legend i{display:inline-block;width:14px;height:14px;border:2px solid var(--line);vertical-align:-2px;margin-right:4px}
+.epnav{display:flex;justify-content:space-between;gap:8px;margin:6px 0 4px}
+.epnav a{flex:1;text-align:center;border:2px solid var(--line);border-radius:8px;min-height:44px;display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);font-weight:700;background:var(--card)}
+.epnav a[aria-disabled=true]{opacity:.35;pointer-events:none}
+.stat{display:flex;gap:18px;align-items:baseline;flex-wrap:wrap;margin:4px 0 14px}
+.stat b{font:30px/1 "Dela Gothic One",sans-serif}
+.stars{color:var(--red);letter-spacing:2px;white-space:nowrap}
+form.post{background:var(--card);border:3px solid var(--line);border-radius:4px;padding:14px;display:grid;gap:10px;box-shadow:5px 5px 0 var(--line)}
+.starpick{display:flex;gap:2px}
+.starpick button{border:0;background:none;font-size:28px;min-height:44px;width:44px;padding:0;color:var(--sub)}
+.starpick button.on{color:var(--red)}
+.chk{display:flex;align-items:center;gap:8px;font-size:15px;min-height:44px}
+.chk input{width:22px;height:22px;min-height:0;accent-color:var(--red)}
+.cmts{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:16px}
+.bub{position:relative;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:12px 16px;margin-left:10px}
+.bub::before{content:"";position:absolute;left:-12px;top:18px;width:16px;height:16px;background:var(--card);border-left:2px solid var(--line);border-bottom:2px solid var(--line);transform:rotate(45deg) skew(10deg,10deg)}
+.bub .meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--sub);margin-bottom:4px}
+.bub .meta b{color:var(--ink);font-size:14px}
+.bub p{margin:0;white-space:pre-wrap;word-break:break-word}
+.spo p{filter:blur(6px);user-select:none;cursor:pointer}
+.spo .tag{background:var(--red);color:#fff;border-radius:4px;padding:0 6px;font-weight:700}
+.del{margin-left:auto;min-height:32px;padding:0 10px;font-size:13px;border-width:1px}
+.sort{display:flex;gap:6px;margin-top:20px}
+.sort button{min-height:36px;font-size:13px;padding:0 12px}
+.sort button.on{background:var(--ink);color:var(--bg)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+@media(prefers-reduced-motion:reduce){.work,.toast{transition:none}}
+</style>
+</head>
+<body>
+<header><div class="hd"><a class="logo" href="#top"><i></i>コマ語り</a><small>漫画の「この話」の感想を言い合う場所<br>※各配信アプリとは無関係の非公式サイト</small></div></header>
+<main id="app"><p class="muted">読み込み中…</p></main>
+<div class="toast" id="toast" role="status"></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// Firebase設定(公開して問題ない値)
+const firebaseConfig = {
+  apiKey: "AIzaSyCeau3wB2ZsUUfV8k-SJXh4EgA4l_VRn6c",
+  authDomain: "komagatari-af475.firebaseapp.com",
+  projectId: "komagatari-af475",
+  storageBucket: "komagatari-af475.firebasestorage.app",
+  messagingSenderId: "100781524904",
+  appId: "1:100781524904:web:2f011520e9c414c046bf9d"
+};
+
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => s.normalize('NFKC').replace(/\s+/g,'').toLowerCase();
+const toast = m => { const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('on'),2600); };
+const ms = v => v && v.toMillis ? v.toMillis() : (typeof v==='number' ? v : Date.now());
+const ago = t => { const d=(Date.now()-t)/1000; if(d<60) return 'たった今'; if(d<3600) return Math.floor(d/60)+'分前'; if(d<86400) return Math.floor(d/3600)+'時間前'; if(d<86400*30) return Math.floor(d/86400)+'日前'; const x=new Date(t); return `${x.getFullYear()}/${x.getMonth()+1}/${x.getDate()}`; };
+const starStr = n => '★'.repeat(n)+'☆'.repeat(5-n);
+const ls = { get:k=>{ try{return localStorage.getItem(k)||''}catch(e){return ''} }, set:(k,v)=>{ try{localStorage.setItem(k,v)}catch(e){} } };
+
+let db=null, me=null, setupErr='';
+let works=[], worksReady=false, worksErr='';
+let cmts=[], cmtWork=null, cmtUnsub=null, cmtReady=false;
+let sortMode='new', q='', draftStar=0, revealed=new Set();
+
+function route(){
+  const h=location.hash.slice(1);
+  let m=h.match(/^w-([A-Za-z0-9_-]+)-e-(\d+)$/); if(m) return {v:'ep',id:m[1],ep:+m[2]};
+  m=h.match(/^w-([A-Za-z0-9_-]+)$/); if(m) return {v:'work',id:m[1]};
+  return {v:'home'};
+}
+
+function watchCmts(id){
+  if(cmtWork===id) return;
+  cmtUnsub && cmtUnsub(); cmtWork=id; cmts=[]; cmtReady=false;
+  const tm=setTimeout(()=>{ if(!cmtReady){ cmtReady='slow'; render(); } },10000);
+  cmtUnsub=onSnapshot(query(collection(db,'c'),where('w','==',id)), s=>{
+    cmts=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at)}; });
+    cmtReady=true; clearTimeout(tm); render();
+  }, e=>{ clearTimeout(tm); cmtReady=true; toast('感想を読み込めませんでした'); render(); });
+}
+
+function render(){
+  const r=route();
+  if(setupErr){ app.innerHTML=`<h1>準備中です</h1><div class="note">${esc(setupErr)}</div>`; return; }
+  if(r.v==='home') return home();
+  const w=works.find(x=>x.id===r.id);
+  if(!w){ app.innerHTML = worksReady ? `<a class="back" href="#top">← 作品一覧へ</a><h1>作品が見つかりません</h1><p class="muted">削除されたか、リンクが間違っているかもしれません。</p>` : `<p class="muted">読み込み中…</p>`; return; }
+  watchCmts(w.id);
+  r.v==='work' ? workView(w) : epView(w, r.ep);
+}
+
+function home(){
+  const list=works.filter(w=>!q || norm(w.title).includes(norm(q))).sort((a,b)=>(b.last||b.at||0)-(a.last||a.at||0));
+  app.innerHTML=`
+  <h1>読んだ話の感想、<br>ここで言い合おう。</h1>
+  <p class="muted">作品と話数をそろえて登録すると、話ごとに感想・★評価を書き込めます。登録不要・誰でも使えます。作品名は配信アプリの表記どおりに入れると探しやすくなります。</p>
+  <form id="addf" class="row" style="margin-top:14px">
+    <input id="q" placeholder="作品名で検索 / 新しく登録" value="${esc(q)}" autocomplete="off" aria-label="作品名">
+    <input id="neps" type="number" min="1" max="3000" inputmode="numeric" placeholder="最新話数" style="flex:0 1 120px" aria-label="最新話数">
+    <button class="pri" ${me?'':'disabled'}>作品を登録</button>
+  </form>
+  ${worksErr?`<div class="note">${esc(worksErr)}</div>`:''}
+  ${!worksReady?'<p class="muted">作品を読み込み中…</p>': !works.length?'<div class="note">まだ作品がありません。上の欄に作品名と最新話数を入れて、最初の1作品を登録してください。</div>': !list.length?`<div class="note">「${esc(q)}」は未登録です。最新話数を入れて「作品を登録」を押すと追加できます。</div>`:''}
+  <div class="works">${list.map(w=>`<a class="work" href="#w-${w.id}"><b>${esc(w.title)}</b><span>全${w.eps}話 ・ 感想 ${w.n||0}件${w.last?' ・ '+ago(w.last):''}</span></a>`).join('')}</div>`;
+  const qi=$('#q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; home(); const n=$('#q'); n.focus(); n.setSelectionRange(p,p); };
+  $('#addf').onsubmit=async e=>{
+    e.preventDefault();
+    const title=$('#q').value.trim(), eps=parseInt($('#neps').value,10);
+    if(!title) return toast('作品名を入れてください');
+    const dup=works.find(w=>norm(w.title)===norm(title));
+    if(dup){ location.hash='w-'+dup.id; return; }
+    if(!(eps>=1 && eps<=3000)) return toast('最新話数(1〜3000)を入れてください');
+    try{ const ref=doc(collection(db,'works')); await setDoc(ref,{title:title.slice(0,80),eps,by:me,at:serverTimestamp(),n:0}); q=''; location.hash='w-'+ref.id; toast('登録しました'); }
+    catch(err){ handleErr(err); }
+  };
+}
+
+function epStats(){
+  const m={};
+  cmts.forEach(c=>{ const s=m[c.ep]||(m[c.ep]={n:0,last:0}); s.n++; s.last=Math.max(s.last,c.at||0); });
+  return m;
+}
+
+function workView(w){
+  const st=epStats(), now=Date.now();
+  const maxEp=Math.max(w.eps, ...Object.keys(st).map(Number));
+  const cells=Array.from({length:maxEp},(_,i)=>{ const e=i+1, s=st[e]; const lv=!s?'':s.n>=6?'h3':s.n>=3?'h2':'h1';
+    return `<a class="ep ${lv} ${s&&now-s.last<86400000?'new':''}" href="#w-${w.id}-e-${e}" aria-label="第${e}話 感想${s?s.n:0}件">${e}<small>${s?s.n+'件':'—'}</small></a>`; }).join('');
+  app.innerHTML=`<a class="back" href="#top">← 作品一覧へ</a>
+  <h1>${esc(w.title)}</h1>
+  <div class="stat"><span><b>${maxEp}</b> 話</span><span><b>${cmts.length}</b> 件の感想</span></div>
+  <form id="epf" class="row">
+    <input id="epn" type="number" min="1" inputmode="numeric" placeholder="話数を入力してジャンプ" style="flex:1 1 180px" aria-label="話数">
+    <button class="pri">開く</button>
+    <button type="button" id="bump" ${me?'':'disabled'}>最新話を更新</button>
+  </form>
+  <div class="legend"><span><i style="background:var(--card)"></i>感想なし</span><span><i style="background:color-mix(in srgb,var(--tone) 32%,var(--card))"></i>にぎわい中</span><span><i style="background:var(--tone)"></i>6件以上</span><span><i style="background:var(--red);border-radius:50%;border:0"></i>24時間以内に投稿</span></div>
+  ${cmtReady==='slow'?'<div class="note">感想の読み込みに時間がかかっています。少し待つか、通信状態を確認してください。</div>':''}
+  <div class="grid">${cells}</div>`;
+  $('#epf').onsubmit=e=>{ e.preventDefault(); const n=parseInt($('#epn').value,10); if(n>=1) location.hash=`w-${w.id}-e-${n}`; };
+  $('#bump').onclick=()=>{
+    const f=$('#epf'); if(f.querySelector('#newEp')) return;
+    f.insertAdjacentHTML('beforeend',`<div class="row" style="flex-basis:100%"><input id="newEp" type="number" min="${w.eps}" max="3000" value="${w.eps+1}" inputmode="numeric" aria-label="新しい最新話数" style="flex:1 1 160px"><button type="button" class="red" id="saveEp">この話数にする</button></div>`);
+    $('#saveEp').onclick=async()=>{ const n=parseInt($('#newEp').value,10); if(!(n>=w.eps&&n<=3000)) return toast(`${w.eps}〜3000で入れてください`);
+      try{ await updateDoc(doc(db,'works',w.id),{eps:n}); toast(`全${n}話に更新しました`); }catch(err){ handleErr(err); } };
+  };
+}
+
+function epView(w, ep){
+  const list=cmts.filter(c=>c.ep===ep).sort((a,b)=> sortMode==='new' ? (b.at||0)-(a.at||0) : (b.star||0)-(a.star||0)||(b.at||0)-(a.at||0));
+  const rated=list.filter(c=>c.star), avg=rated.length? rated.reduce((s,c)=>s+c.star,0)/rated.length : 0;
+  const maxEp=Math.max(w.eps,ep);
+  app.innerHTML=`<a class="back" href="#w-${w.id}">← ${esc(w.title)} の話数一覧</a>
+  <h1>第${ep}話</h1>
+  <div class="epnav"><a href="#w-${w.id}-e-${ep-1}" aria-disabled="${ep<=1}">← 第${Math.max(1,ep-1)}話</a><a href="#w-${w.id}-e-${ep+1}" aria-disabled="${ep>=maxEp}">第${ep+1}話 →</a></div>
+  <div class="stat"><span><b>${list.length}</b> 件</span>${rated.length?`<span class="stars">${starStr(Math.round(avg))}</span><span class="muted">平均 ${avg.toFixed(1)}(${rated.length}人)</span>`:'<span class="muted">まだ評価なし</span>'}</div>
+  <form class="post" id="pf">
+    <label for="tx" style="font-weight:700">第${ep}話の感想を書く</label>
+    <input id="nm" maxlength="20" placeholder="ニックネーム(空欄なら「名無しの読者」)" value="${esc(ls.get('nick'))}" aria-label="ニックネーム">
+    <div class="starpick" role="group" aria-label="評価">${[1,2,3,4,5].map(i=>`<button type="button" data-s="${i}" class="${i<=draftStar?'on':''}" aria-label="${i}つ星">★</button>`).join('')}<span class="muted" style="align-self:center;margin-left:6px">${draftStar?draftStar+'つ星(もう一度押すと解除)':'評価は任意'}</span></div>
+    <textarea id="tx" maxlength="1000" placeholder="この話のどこが良かった？ 気になった展開は？"></textarea>
+    <div class="row"><label class="chk"><input type="checkbox" id="sp">ネタバレを含む(ぼかして表示)</label><button class="red" style="margin-left:auto" ${me?'':'disabled'}>投稿する</button></div>
+  </form>
+  <div class="sort" role="group" aria-label="並び替え"><button data-m="new" class="${sortMode==='new'?'on':''}">新しい順</button><button data-m="star" class="${sortMode==='star'?'on':''}">評価が高い順</button></div>
+  ${!cmtReady?'<p class="muted">感想を読み込み中…</p>':cmtReady==='slow'?'<div class="note">感想の読み込みに時間がかかっています。</div>':''}
+  ${cmtReady===true&&!list.length?'<div class="note">まだ感想がありません。最初のひとことをどうぞ。</div>':''}
+  <ul class="cmts">${list.map(c=>{ const sp=c.sp&&!revealed.has(c.id);
+    return `<li class="bub ${sp?'spo':''}" data-id="${c.id}"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b>${c.star?`<span class="stars">${starStr(c.star)}</span>`:''}<span>${ago(c.at||0)}</span>${c.sp?'<span class="tag">ネタバレ</span>':''}${c.by===me?`<button class="del" data-del="${c.id}">削除</button>`:''}</div><p ${sp?'title="タップで表示"':''}>${esc(c.text)}</p></li>`; }).join('')}</ul>`;
+  const tx=$('#tx'); tx.value=ls.get('d:'+w.id+':'+ep);
+  tx.oninput=()=>ls.set('d:'+w.id+':'+ep,tx.value);
+  app.querySelectorAll('.starpick button').forEach(b=>b.onclick=()=>{ const s=+b.dataset.s; draftStar= draftStar===s?0:s; const v=tx.value, n=$('#nm').value; epView(w,ep); $('#tx').value=v; $('#nm').value=n; });
+  app.querySelectorAll('.sort button').forEach(b=>b.onclick=()=>{ sortMode=b.dataset.m; epView(w,ep); });
+  app.querySelectorAll('.spo p').forEach(p=>p.onclick=()=>{ revealed.add(p.closest('li').dataset.id); epView(w,ep); });
+  app.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.ok!=='1'){ b.dataset.ok='1'; b.textContent='本当に削除'; b.classList.add('red'); return; }
+    try{ await deleteDoc(doc(db,'c',b.dataset.del)); await updateDoc(doc(db,'works',w.id),{n:increment(-1)}).catch(()=>{}); toast('削除しました'); }catch(err){ handleErr(err); }
+  });
+  $('#pf').onsubmit=async e=>{
+    e.preventDefault(); const text=tx.value.trim(); if(!text) return toast('感想を入力してください');
+    const name=$('#nm').value.trim().slice(0,20); ls.set('nick',name);
+    const btn=e.target.querySelector('.red'); btn.disabled=true;
+    try{
+      await addDoc(collection(db,'c'),{w:w.id,ep,text:text.slice(0,1000),star:draftStar,sp:$('#sp').checked,name,by:me,at:serverTimestamp()});
+      ls.set('d:'+w.id+':'+ep,''); draftStar=0; toast('投稿しました');
+      await updateDoc(doc(db,'works',w.id),{n:increment(1),last:serverTimestamp(), ...(ep>w.eps?{eps:ep}:{})}).catch(()=>{});
+    }catch(err){ handleErr(err); btn.disabled=false; }
+  };
+}
+
+function handleErr(err){
+  const c=err&&err.code||'';
+  if(c.includes('permission')) toast('保存できない内容でした(文字数・話数などを確認してください)');
+  else if(c.includes('resource-exhausted')) toast('混み合っています。少し待ってから試してください');
+  else toast('保存できませんでした。通信状態を確認してください');
+}
+
+window.addEventListener('hashchange',()=>{ window.scrollTo(0,0); draftStar=0; render(); });
+
+if(firebaseConfig.projectId==='ここに貼る'){
+  setupErr='Firebaseの設定がまだ入っていません。index.html の firebaseConfig を自分のプロジェクトの値に書き換えてください。';
+  render();
+} else {
+  const fb=initializeApp(firebaseConfig);
+  db=getFirestore(fb);
+  const auth=getAuth(fb);
+  onAuthStateChanged(auth,u=>{ if(u){ me=u.uid; render(); } });
+  signInAnonymously(auth).catch(()=>toast('匿名ログインに失敗しました(Firebaseで匿名認証を有効にしてください)'));
+  const tm=setTimeout(()=>{ if(!worksReady){ worksReady=true; worksErr='作品一覧の読み込みに時間がかかっています。通信状態を確認してください。'; render(); } },10000);
+  onSnapshot(collection(db,'works'), s=>{
+    works=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at),last:x.last?ms(x.last):0}; });
+    worksReady=true; worksErr=''; clearTimeout(tm); render();
+  }, e=>{ clearTimeout(tm); worksReady=true; worksErr='作品一覧を読み込めませんでした。Firestoreのルールが公開されているか確認してください。'; render(); });
+  render();
+}
+
+</script>
+</body>
+</html>
