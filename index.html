@@ -114,6 +114,11 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 #modal.on{display:flex}
 .sheet{background:var(--bg);color:var(--ink);width:min(560px,100%);border:3px solid var(--line);border-bottom:0;border-radius:14px 14px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
 .apps{margin:4px 0 6px}.apps .chips{margin-top:4px}
+.ep.bmk::before{content:"◆";position:absolute;top:2px;left:5px;font-size:11px;color:var(--red)}
+.hit.bm{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}.hit.bm a{color:var(--ink);text-decoration:none}
+.go{color:var(--red)!important;font-weight:700;text-decoration:none}
+.bmbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:4px 0 8px}
+.jo{background:var(--soft);border-radius:8px;padding:10px 12px;font-size:14px;margin:0 0 12px}.jo a{color:var(--red);font-weight:700}
 </style>
 </head>
 <body>
@@ -155,7 +160,7 @@ const ls = { get:k=>{ try{return localStorage.getItem(k)||''}catch(e){return ''}
 
 let db=null, me=null, setupErr='';
 let works=[], worksReady=false, worksErr='';
-let cur=null, unsubs=[], cmts=[], cmtReady=false, tvW=[], hlW={}, raW=[];
+let cur=null, unsubs=[], cmts=[], cmtReady=false, tvW=[], hlW={}, raW=[], joW=[];
 let allHl=[], allTv=null, allTvAt=0, tvLoading=false, allRa=null, allRaAt=0, raLoading=false;
 let sortMode='new', q='', draftStar=0, revealed=new Set(), peek=new Set(), askedProg=new Set(), hlMine={};
 
@@ -165,6 +170,13 @@ const setProg = (wid,v) => ls.set('rd:'+wid, String(v));
 const isRead = (wid,ep) => { const p=prog(wid); return (!!p && (p.all || ep<=p.n)) || peek.has(wid+'_'+ep); };
 const bumpProg = (wid,ep) => { const p=prog(wid); if(p&&p.all) return; if(!p||p.later||ep>p.n) setProg(wid,ep); };
 const progLabel = p => !p ? 'どこまで読んだか未設定' : p.all ? '最新話まで読んだ' : p.later ? 'どこまで読んだか未設定' : p.n===0 ? 'まだ読んでいない' : `第${p.n}話まで読んだ`;
+
+// ===== しおり(この端末にだけ保存) =====
+const MAX_LEAD = 10;   // 何話前まで選べるか
+const bms = wid => { try{ return JSON.parse(ls.get('bm:'+wid)||'[]'); }catch(e){ return []; } };
+const saveBms = (wid,arr) => ls.set('bm:'+wid, JSON.stringify(arr.sort((a,b)=>a.ep-b.ep)));
+const myBm = (wid,ep) => bms(wid).find(b=>b.ep===ep);
+const joStat = ep => { const l=joW.filter(d=>d.ep===ep).map(d=>d.lead); if(!l.length) return null; const avg=l.reduce((a,b)=>a+b,0)/l.length; return {n:l.length, avg, from:Math.max(1,ep-Math.round(avg))}; };
 
 // ===== モーダル =====
 const modal=document.createElement('div'); modal.id='modal'; document.body.append(modal);
@@ -182,12 +194,13 @@ function route(){
 
 function watchWork(id){
   if(cur===id) return;
-  unsubs.forEach(u=>u()); unsubs=[]; cur=id; cmts=[]; cmtReady=false; tvW=[]; hlW={}; raW=[];
+  unsubs.forEach(u=>u()); unsubs=[]; cur=id; cmts=[]; cmtReady=false; tvW=[]; hlW={}; raW=[]; joW=[];
   const tm=setTimeout(()=>{ if(!cmtReady){ cmtReady='slow'; render(); } },10000);
   unsubs.push(onSnapshot(query(collection(db,'c'),where('w','==',id)), s=>{
     cmts=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at)}; }); cmtReady=true; clearTimeout(tm); render();
   }, ()=>{ clearTimeout(tm); cmtReady=true; toast('感想を読み込めませんでした'); render(); }));
   unsubs.push(onSnapshot(query(collection(db,'tv'),where('w','==',id)), s=>{ tvW=s.docs.map(d=>d.data()); render(); }, ()=>{}));
+  unsubs.push(onSnapshot(query(collection(db,'jo'),where('w','==',id)), s=>{ joW=s.docs.map(d=>d.data()); render(); }, ()=>{}));
   unsubs.push(onSnapshot(query(collection(db,'ra'),where('w','==',id)), s=>{ raW=s.docs.map(d=>d.data()); render(); }, ()=>{}));
   unsubs.push(onSnapshot(query(collection(db,'hl'),where('w','==',id),where('ok','==',true)), s=>{ hlW={}; s.docs.forEach(d=>{const x=d.data(); hlW[x.ep]=x.text;}); render(); }, ()=>{}));
 }
@@ -310,6 +323,30 @@ function appView(i){
   ${wl.length?`<div class="hits">${wl.map(([id,n])=>`<a class="hit" href="#w-${id}"><b>${esc(T(id).title)}</b><span>全${T(id).eps}話 ・ 感想${T(id).n||0}件</span><span class="n">${n}人</span></a>`).join('')}</div>`:'<div class="note">まだ登録がありません。作品ページの「読んだアプリ」から選べます。</div>'}`;
 }
 
+function bmSheet(w,ep){
+  const cur0=myBm(w.id,ep); let lead=cur0?ep-cur0.from:3; lead=Math.min(lead,ep-1);
+  const st=joStat(ep);
+  const draw=m=>{ m.querySelector('#ld').innerHTML=Array.from({length:Math.min(MAX_LEAD,ep-1)+1},(_,i)=>`<button type="button" class="chip pick ${i===lead?'on':''}" data-l="${i}">${i===0?'この話から':i+'話前'}</button>`).join('');
+    m.querySelector('#ldx').textContent=lead===0?`第${ep}話から読む`:`第${ep-lead}話から読み始めて、第${ep}話で最高の瞬間へ`;
+    m.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{ lead=+b.dataset.l; draw(m); }); };
+  openModal(`<h2 style="margin-top:0">第${ep}話にしおりを付ける</h2>
+    <p class="muted">何回でも見直したい回に。何話前から読み直すと最高の流れになりますか？</p>
+    <div class="chips" id="ld"></div><p id="ldx" style="font-weight:700;margin:4px 0 12px"></p>
+    ${st?`<p class="muted">みんなは平均${st.avg.toFixed(1)}話前から読み直しています(${st.n}人)</p>`:''}
+    <label for="bmm" class="muted">自分だけのメモ(ほかの人には見えません)</label>
+    <textarea id="bmm" maxlength="100" style="min-height:70px" placeholder="例: 師匠の最後のセリフで泣く">${esc(cur0?cur0.memo:'')}</textarea>
+    <div class="row" style="margin-top:12px"><button class="red" id="bmok">保存</button>${cur0?'<button id="bmdel">しおりを外す</button>':''}<button id="bmx">閉じる</button></div>`,
+  m=>{ draw(m); m.querySelector('#bmx').onclick=closeModal;
+    m.querySelector('#bmok').onclick=async()=>{
+      const arr=bms(w.id).filter(b=>b.ep!==ep); arr.push({ep,from:ep-lead,memo:m.querySelector('#bmm').value.trim().slice(0,100),at:Date.now()}); saveBms(w.id,arr);
+      closeModal(); toast('しおりを付けました'); render();
+      if(me) setDoc(doc(db,'jo',`${me}_${w.id}_${ep}`),{w:w.id,ep,by:me,lead}).catch(()=>{});
+    };
+    const d=m.querySelector('#bmdel'); if(d) d.onclick=()=>{ saveBms(w.id,bms(w.id).filter(b=>b.ep!==ep)); closeModal(); toast('しおりを外しました'); render();
+      if(me) deleteDoc(doc(db,'jo',`${me}_${w.id}_${ep}`)).catch(()=>{}); };
+  });
+}
+
 function epStats(){
   const m={};
   cmts.forEach(c=>{ const s=m[c.ep]||(m[c.ep]={n:0,last:0}); s.n++; s.last=Math.max(s.last,c.at||0); });
@@ -348,10 +385,10 @@ function tagSheet(w, ep){
 }
 
 function workView(w){
-  const st=epStats(), now=Date.now(), p=prog(w.id);
+  const st=epStats(), now=Date.now(), p=prog(w.id), bmSet=new Set(bms(w.id).map(b=>b.ep));
   const maxEp=Math.max(w.eps, ...Object.keys(st).map(Number));
   const cells=Array.from({length:maxEp},(_,i)=>{ const e=i+1, s=st[e]; const lv=!s?'':s.n>=6?'h3':s.n>=3?'h2':'h1';
-    return `<a class="ep ${lv} ${s&&now-s.last<86400000?'new':''} ${isRead(w.id,e)?'rd':''}" href="#w-${w.id}-e-${e}" aria-label="第${e}話 感想${s?s.n:0}件">${e}<small>${s?s.n+'件':'—'}</small></a>`; }).join('');
+    return `<a class="ep ${lv} ${s&&now-s.last<86400000?'new':''} ${isRead(w.id,e)?'rd':''} ${bmSet.has(e)?'bmk':''}" href="#w-${w.id}-e-${e}" aria-label="第${e}話 感想${s?s.n:0}件">${e}<small>${s?s.n+'件':'—'}</small></a>`; }).join('');
   // 盛り上がった回
   const hot={}; tvW.forEach(d=>{ if(d.ep>0) hot[d.ep]=(hot[d.ep]||0)+(d.tags||[]).filter(t=>EP_TAGS.includes(t)).length; });
   const hotL=Object.entries(hot).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
@@ -361,6 +398,7 @@ function workView(w){
   <div class="stat"><span><b>${maxEp}</b> 話</span><span><b>${cmts.length}</b> 件の感想</span></div>
   ${chips(countTags(tvW,0,WORK_TAGS), `<button type="button" class="chip add" id="wtag">＋ 作品タグを付ける</button>`)}
   <div class="apps"><span class="muted">読まれているアプリ</span><div class="chips">${countApps(raW).map(([a,n])=>`<a class="chip" href="#a-${APPS.indexOf(a)}">${esc(a)}<small>${n}人</small></a>`).join('')}<button type="button" class="chip add" id="wapp">${myApps().length?'✎ 自分の読んだアプリを変更':'＋ 読んだアプリを選ぶ'}</button></div></div>
+  ${bms(w.id).length?`<h2>あなたのしおり</h2><div class="hits">${bms(w.id).map(b=>`<div class="hit bm"><a href="#w-${w.id}-e-${b.ep}"><b>第${b.ep}話${hlW[b.ep]?`「${esc(hlW[b.ep])}」`:''}</b></a>${b.memo?`<span>${esc(b.memo)}</span>`:''}<a class="go" href="#w-${w.id}-e-${b.from}">▶ 第${b.from}話から読む</a></div>`).join('')}</div>`:''}
   ${hotL.length?`<h2>盛り上がった回</h2><div class="hits">${hotL.map(([e])=>{ e=+e; const rd=isRead(w.id,e), tg=countTags(tvW,e,EP_TAGS).slice(0,3);
      return `<a class="hit" href="#w-${w.id}-e-${e}"><b>第${e}話</b>${rd?`<span>${hlW[e]?`「${esc(hlW[e])}」 `:''}${tg.map(([t])=>'#'+esc(t)).join(' ')}</span>`:'<span class="blur">まだ読んでいない回のため非表示</span>'}</a>`; }).join('')}</div>`:''}
   <h2>話数</h2>
@@ -369,7 +407,7 @@ function workView(w){
     <button class="pri">開く</button>
     <button type="button" id="bump" ${me?'':'disabled'}>最新話を更新</button>
   </form>
-  <div class="legend"><span><i style="background:var(--card)"></i>感想なし</span><span><i style="background:color-mix(in srgb,var(--tone) 32%,var(--card))"></i>にぎわい中</span><span><i style="background:var(--tone)"></i>6件以上</span><span><i style="background:var(--card);box-shadow:inset 0 -4px 0 var(--red)"></i>読んだ回</span><span><i style="background:var(--red);border-radius:50%;border:0"></i>24時間以内に投稿</span></div>
+  <div class="legend"><span><i style="background:var(--card)"></i>感想なし</span><span><i style="background:color-mix(in srgb,var(--tone) 32%,var(--card))"></i>にぎわい中</span><span><i style="background:var(--tone)"></i>6件以上</span><span><i style="background:var(--card);box-shadow:inset 0 -4px 0 var(--red)"></i>読んだ回</span><span><i style="background:var(--red);border-radius:50%;border:0"></i>24時間以内に投稿</span><span><i style="border:0;background:none;color:var(--red);font-style:normal;width:auto;height:auto">◆</i>しおり</span></div>
   ${cmtReady==='slow'?'<div class="note">感想の読み込みに時間がかかっています。少し待つか、通信状態を確認してください。</div>':''}
   <div class="grid">${cells}</div>`;
   $('#pged').onclick=()=>progSheet(w,false);
@@ -412,6 +450,9 @@ function epView(w, ep){
   app.innerHTML=nav+`${hlBox}
   <div class="stat"><span><b>${list.length}</b> 件</span>${rated.length?`<span class="stars">${starStr(Math.round(avg))}</span><span class="muted">平均 ${avg.toFixed(1)}(${rated.length}人)</span>`:'<span class="muted">まだ評価なし</span>'}</div>
   ${chips(countTags(tvW,ep,EP_TAGS), `<button type="button" class="chip add" id="etag">＋ この回にタグを付ける</button>`)}
+  ${(()=>{ const b=myBm(w.id,ep), st=joStat(ep);
+    return `<div class="bmbar"><button type="button" class="${b?'red':''}" id="bmb">${b?'◆ しおり済み(変更)':'◇ しおりを付ける'}</button>${b&&b.from<ep?`<a class="go" href="#w-${w.id}-e-${b.from}">▶ 第${b.from}話から読み直す</a>`:''}</div>
+    ${st&&st.from<ep?`<p class="jo">この回は、みんな平均${st.avg.toFixed(1)}話前から読み直しています。<a href="#w-${w.id}-e-${st.from}">第${st.from}話から読むのがおすすめ</a>(${st.n}人)</p>`:''}`; })()}
   <form class="post" id="pf">
     <label for="tx" style="font-weight:700">第${ep}話の感想を書く</label>
     <input id="nm" maxlength="20" placeholder="ニックネーム(空欄なら「名無しの読者」)" value="${esc(ls.get('nick'))}" aria-label="ニックネーム">
@@ -427,6 +468,7 @@ function epView(w, ep){
   const tx=$('#tx'); tx.value=ls.get('d:'+w.id+':'+ep);
   tx.oninput=()=>ls.set('d:'+w.id+':'+ep,tx.value);
   $('#etag').onclick=()=>tagSheet(w,ep);
+  $('#bmb').onclick=()=>bmSheet(w,ep);
   const hf=$('#hlf'); if(hf) hf.onsubmit=async e=>{ e.preventDefault(); const t=$('#hlt').value.trim(); if(!t) return toast('見出しを入れてください');
     try{ await setDoc(doc(db,'hl',hk),{w:w.id,ep,text:t.slice(0,30),by:me,ok:false,at:serverTimestamp()}); hlMine[hk]='mine'; toast('提案しました。確認後に表示されます'); epView(w,ep); }
     catch(err){ hlMine[hk]='taken'; toast('すでに提案されています'); epView(w,ep); } };

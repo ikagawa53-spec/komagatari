@@ -1,5 +1,5 @@
 // コマ語り サービスワーカー: 画面の部品をキャッシュして、アプリのように素早く起動させる
-const CACHE = 'komagatari-v5';
+const CACHE = 'komagatari-v6';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
