@@ -113,6 +113,7 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;z-index:20}
 #modal.on{display:flex}
 .sheet{background:var(--bg);color:var(--ink);width:min(560px,100%);border:3px solid var(--line);border-bottom:0;border-radius:14px 14px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
+.apps{margin:4px 0 6px}.apps .chips{margin-top:4px}
 </style>
 </head>
 <body>
@@ -137,7 +138,8 @@ const firebaseConfig = {
 // ===== タグ一覧(ここを書き換えるだけで変更できます) =====
 const WORK_TAGS = ['覚醒','成り上がり','復讐','異世界','転生','バトル','恋愛','胸キュン','ダーク','ほのぼの','ギャグ','頭脳戦','ミステリー','泣ける','作画が神','ハッピーエンド'];
 const EP_TAGS   = ['クライマックス','涙腺崩壊','覚醒','名バトル','伏線回収','胸アツ','神作画','ざまぁ','衝撃展開','胸キュン','爆笑','鬱展開'];
-const MAX_WT = 5, MAX_ET = 3;   // 1人が付けられるタグの数(作品 / 話)
+const APPS      = ['ピッコマ','LINEマンガ','めちゃコミック','コミックシーモア','ebookjapan','マンガワン','少年ジャンプ+','マガポケ','サイコミ','comico','Kindle','紙の単行本','その他'];
+const MAX_WT = 5, MAX_ET = 3, MAX_APP = 3;   // 1人が選べる数(作品タグ / 話タグ / 読んだアプリ)
 // ===========================================================
 const ALL_TAGS = [...new Set([...WORK_TAGS, ...EP_TAGS])];
 
@@ -153,8 +155,8 @@ const ls = { get:k=>{ try{return localStorage.getItem(k)||''}catch(e){return ''}
 
 let db=null, me=null, setupErr='';
 let works=[], worksReady=false, worksErr='';
-let cur=null, unsubs=[], cmts=[], cmtReady=false, tvW=[], hlW={};
-let allHl=[], allTv=null, allTvAt=0, tvLoading=false;
+let cur=null, unsubs=[], cmts=[], cmtReady=false, tvW=[], hlW={}, raW=[];
+let allHl=[], allTv=null, allTvAt=0, tvLoading=false, allRa=null, allRaAt=0, raLoading=false;
 let sortMode='new', q='', draftStar=0, revealed=new Set(), peek=new Set(), askedProg=new Set(), hlMine={};
 
 // ===== どこまで読んだ(この端末にだけ保存) =====
@@ -174,17 +176,19 @@ function route(){
   let m=h.match(/^w-([A-Za-z0-9_-]+)-e-(\d+)$/); if(m) return {v:'ep',id:m[1],ep:+m[2]};
   m=h.match(/^w-([A-Za-z0-9_-]+)$/); if(m) return {v:'work',id:m[1]};
   m=h.match(/^t-(\d+)$/); if(m) return {v:'tag',i:+m[1]};
+  m=h.match(/^a-(\d+)$/); if(m) return {v:'app',i:+m[1]};
   return {v:'home'};
 }
 
 function watchWork(id){
   if(cur===id) return;
-  unsubs.forEach(u=>u()); unsubs=[]; cur=id; cmts=[]; cmtReady=false; tvW=[]; hlW={};
+  unsubs.forEach(u=>u()); unsubs=[]; cur=id; cmts=[]; cmtReady=false; tvW=[]; hlW={}; raW=[];
   const tm=setTimeout(()=>{ if(!cmtReady){ cmtReady='slow'; render(); } },10000);
   unsubs.push(onSnapshot(query(collection(db,'c'),where('w','==',id)), s=>{
     cmts=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at)}; }); cmtReady=true; clearTimeout(tm); render();
   }, ()=>{ clearTimeout(tm); cmtReady=true; toast('感想を読み込めませんでした'); render(); }));
   unsubs.push(onSnapshot(query(collection(db,'tv'),where('w','==',id)), s=>{ tvW=s.docs.map(d=>d.data()); render(); }, ()=>{}));
+  unsubs.push(onSnapshot(query(collection(db,'ra'),where('w','==',id)), s=>{ raW=s.docs.map(d=>d.data()); render(); }, ()=>{}));
   unsubs.push(onSnapshot(query(collection(db,'hl'),where('w','==',id),where('ok','==',true)), s=>{ hlW={}; s.docs.forEach(d=>{const x=d.data(); hlW[x.ep]=x.text;}); render(); }, ()=>{}));
 }
 
@@ -198,6 +202,7 @@ function render(){
   if(setupErr){ app.innerHTML=`<h1>準備中です</h1><div class="note">${esc(setupErr)}</div>`; return; }
   if(r.v==='home') return home();
   if(r.v==='tag') return tagView(r.i);
+  if(r.v==='app') return appView(r.i);
   const w=works.find(x=>x.id===r.id);
   if(!w){ app.innerHTML = worksReady ? `<a class="back" href="#top">← 作品一覧へ</a><h1>作品が見つかりません</h1><p class="muted">削除されたか、リンクが間違っているかもしれません。</p>` : `<p class="muted">読み込み中…</p>`; return; }
   watchWork(w.id);
@@ -223,7 +228,7 @@ function home(){
   ${!worksReady?'<p class="muted">作品を読み込み中…</p>': !works.length?'<div class="note">まだ作品がありません。上の欄に作品名と最新話数を入れて、最初の1作品を登録してください。</div>': (!list.length&&!hlHits.length&&!tagHits.length)?`<div class="note">「${esc(q)}」は見つかりません。作品名なら、最新話数を入れて「作品を登録」を押すと追加できます。</div>`:''}
   <div class="works">${list.map(w=>`<a class="work" href="#w-${w.id}"><b>${esc(w.title)}</b><span>全${w.eps}話 ・ 感想 ${w.n||0}件${w.last?' ・ '+ago(w.last):''}</span></a>`).join('')}</div>
   ${hlHits.length?`<h2>見出しが一致した回</h2><div class="hits">${hlHits.map(h=>`<a class="hit" href="#w-${h.w}-e-${h.ep}"><b>${esc(title(h.w))}</b><span>第${h.ep}話「${esc(h.text)}」</span></a>`).join('')}</div>`:''}
-  ${!nq?`<h2>タグから探す</h2><p class="muted">上が作品のタグ、下が「この回が熱い」話のタグです。</p><div class="chips">${WORK_TAGS.map(t=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}</a>`).join('')}</div><div class="chips ep">${EP_TAGS.map(t=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}</a>`).join('')}</div>`:''}`;
+  ${!nq?`<h2>タグから探す</h2><p class="muted">上が作品のタグ、下が「この回が熱い」話のタグです。</p><div class="chips">${WORK_TAGS.map(t=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}</a>`).join('')}</div><div class="chips ep">${EP_TAGS.map(t=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}</a>`).join('')}</div><h2>読んだアプリから探す</h2><div class="chips">${APPS.map((a,i)=>`<a class="chip" href="#a-${i}">${esc(a)}</a>`).join('')}</div>`:''}`;
   const qi=$('#q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; home(); const n=$('#q'); n.focus(); n.setSelectionRange(p,p); };
   $('#addf').onsubmit=async e=>{
     e.preventDefault();
@@ -259,6 +264,39 @@ function tagView(i){
       return `<a class="hit" href="#w-${id}-e-${e}"><b>${esc(T(id).title)}</b><span>第${e}話${h?(rd?`「${esc(h)}」`:' <em class="tag">未読</em>'):(rd?'':' <em class="tag">未読</em>')}</span><span class="n">${n}票</span></a>`; }).join('')}</div>`:'<div class="note">まだこのタグが付いた回はありません。話のページから付けられます。</div>'}`:''}`;
 }
 
+const myApps = () => (raW.find(d=>d.by===me)||{}).apps||[];
+const countApps = docs => { const m={}; docs.forEach(d=>(d.apps||[]).forEach(a=>{ if(APPS.includes(a)) m[a]=(m[a]||0)+1; })); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
+async function saveApps(w, sel){
+  const ref=doc(db,'ra',`${me}_${w.id}`);
+  try{ if(sel.length) await setDoc(ref,{w:w.id,by:me,apps:sel}); else await deleteDoc(ref); allRa=null; return true; }catch(err){ handleErr(err); return false; }
+}
+const appPicker = (sel, onChange) => m => { const box=m.querySelector('#ap'); if(!box) return;
+  const draw=()=>{ box.innerHTML=APPS.map(a=>`<button type="button" class="chip pick ${sel.includes(a)?'on':''}" data-a="${esc(a)}">${esc(a)}</button>`).join('');
+    box.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{ const a=b.dataset.a; if(sel.includes(a)) sel.splice(sel.indexOf(a),1); else if(sel.length<MAX_APP) sel.push(a); else return toast(`選べるのは${MAX_APP}つまでです`); onChange&&onChange(); draw(); }); };
+  draw(); };
+
+function appSheet(w){
+  const sel=[...myApps()];
+  openModal(`<h2 style="margin-top:0">どのアプリで読んでいますか？</h2><p class="muted">${MAX_APP}つまで選べます。作品ページに「よく読まれているアプリ」として表示されます。</p><div class="chips" id="ap"></div>
+    <div class="row" style="margin-top:12px"><button class="red" id="apok" ${me?'':'disabled'}>保存</button><button id="apx">閉じる</button></div>`,
+  m=>{ appPicker(sel)(m); m.querySelector('#apx').onclick=closeModal;
+    m.querySelector('#apok').onclick=async()=>{ if(await saveApps(w,sel)){ closeModal(); toast('保存しました'); } }; });
+}
+
+function appView(i){
+  const a=APPS[i]; if(!a){ location.hash='top'; return; }
+  if(!allRa || Date.now()-allRaAt>60000){
+    app.innerHTML=`<a class="back" href="#top">← 作品一覧へ</a><h1>${esc(a)}で読まれている作品</h1><p class="muted">読み込み中…</p>`;
+    if(!raLoading){ raLoading=true; getDocs(collection(db,'ra')).then(s=>{ allRa=s.docs.map(d=>d.data()); }).catch(()=>{ allRa=[]; }).finally(()=>{ allRaAt=Date.now(); raLoading=false; render(); }); }
+    return;
+  }
+  const W={}; allRa.forEach(d=>{ if((d.apps||[]).includes(a)) W[d.w]=(W[d.w]||0)+1; });
+  const T=id=>works.find(w=>w.id===id);
+  const wl=Object.entries(W).filter(([id])=>T(id)).sort((x,y)=>y[1]-x[1]||(T(y[0]).n||0)-(T(x[0]).n||0)).slice(0,50);
+  app.innerHTML=`<a class="back" href="#top">← 作品一覧へ</a><h1>${esc(a)}で読まれている作品</h1>
+  ${wl.length?`<div class="hits">${wl.map(([id,n])=>`<a class="hit" href="#w-${id}"><b>${esc(T(id).title)}</b><span>全${T(id).eps}話 ・ 感想${T(id).n||0}件</span><span class="n">${n}人</span></a>`).join('')}</div>`:'<div class="note">まだ登録がありません。作品ページの「読んだアプリ」から選べます。</div>'}`;
+}
+
 function epStats(){
   const m={};
   cmts.forEach(c=>{ const s=m[c.ep]||(m[c.ep]={n:0,last:0}); s.n++; s.last=Math.max(s.last,c.at||0); });
@@ -270,9 +308,11 @@ function progSheet(w, first){
   openModal(`<h2 style="margin-top:0">${first?'どこまで読みましたか？':'読んだところを変更'}</h2>
     <p class="muted">まだ読んでいない回の感想・タグ・見出しは、ぼかして表示します。記録はこの端末にだけ保存されます。</p>
     <div class="row"><span>第</span><input id="pg" type="number" min="1" max="${maxEp}" inputmode="numeric" value="${p&&!p.all&&p.n?p.n:''}" style="flex:1 1 100px" aria-label="読んだ話数"><span>話まで</span><button class="pri" id="pgok">決定</button></div>
-    <div class="row" style="margin-top:10px"><button id="pgall">最新話まで全部</button><button id="pgnone">まだ読んでいない</button>${first?'<button id="pglater">あとで</button>':'<button id="pgx">閉じる</button>'}</div>`,
+    <div class="row" style="margin-top:10px"><button id="pgall">最新話まで全部</button><button id="pgnone">まだ読んでいない</button>${first?'<button id="pglater">あとで</button>':'<button id="pgx">閉じる</button>'}</div>
+    ${first?`<h3 style="margin:18px 0 0">どのアプリで読んでいますか？<small class="muted">(任意・${MAX_APP}つまで)</small></h3><div class="chips" id="ap"></div>`:''}`,
   m=>{
-    const done=v=>{ setProg(w.id,v); closeModal(); render(); };
+    const sel=[...myApps()]; let touched=false; appPicker(sel,()=>touched=true)(m);
+    const done=v=>{ setProg(w.id,v); if(touched) saveApps(w,sel); closeModal(); render(); };
     m.querySelector('#pgok').onclick=()=>{ const n=parseInt(m.querySelector('#pg').value,10); if(!(n>=1)) return toast('話数を入れてください'); done(n); };
     m.querySelector('#pgall').onclick=()=>done('all');
     m.querySelector('#pgnone').onclick=()=>done(0);
@@ -307,6 +347,7 @@ function workView(w){
   <div class="prog"><span>${progLabel(p)}</span><button type="button" id="pged">変更</button></div>
   <div class="stat"><span><b>${maxEp}</b> 話</span><span><b>${cmts.length}</b> 件の感想</span></div>
   ${chips(countTags(tvW,0,WORK_TAGS), `<button type="button" class="chip add" id="wtag">＋ 作品タグを付ける</button>`)}
+  <div class="apps"><span class="muted">読まれているアプリ</span><div class="chips">${countApps(raW).map(([a,n])=>`<a class="chip" href="#a-${APPS.indexOf(a)}">${esc(a)}<small>${n}人</small></a>`).join('')}<button type="button" class="chip add" id="wapp">${myApps().length?'✎ 自分の読んだアプリを変更':'＋ 読んだアプリを選ぶ'}</button></div></div>
   ${hotL.length?`<h2>盛り上がった回</h2><div class="hits">${hotL.map(([e])=>{ e=+e; const rd=isRead(w.id,e), tg=countTags(tvW,e,EP_TAGS).slice(0,3);
      return `<a class="hit" href="#w-${w.id}-e-${e}"><b>第${e}話</b>${rd?`<span>${hlW[e]?`「${esc(hlW[e])}」 `:''}${tg.map(([t])=>'#'+esc(t)).join(' ')}</span>`:'<span class="blur">まだ読んでいない回のため非表示</span>'}</a>`; }).join('')}</div>`:''}
   <h2>話数</h2>
@@ -320,6 +361,7 @@ function workView(w){
   <div class="grid">${cells}</div>`;
   $('#pged').onclick=()=>progSheet(w,false);
   $('#wtag').onclick=()=>tagSheet(w,0);
+  $('#wapp').onclick=()=>appSheet(w);
   $('#epf').onsubmit=e=>{ e.preventDefault(); const n=parseInt($('#epn').value,10); if(n>=1) location.hash=`w-${w.id}-e-${n}`; };
   $('#bump').onclick=()=>{
     const f=$('#epf'); if(f.querySelector('#newEp')) return;
