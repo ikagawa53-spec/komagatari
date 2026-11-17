@@ -2,7 +2,14 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#15151b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="コマ語り">
 <title>コマ語り 話ごと感想帳</title>
 <meta name="description" content="漫画の話ごとに感想と★評価を言い合える非公式の感想帳">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -80,10 +87,15 @@ form.post{background:var(--card);border:3px solid var(--line);border-radius:4px;
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
 .toast.on{opacity:1}
 @media(prefers-reduced-motion:reduce){.work,.toast{transition:none}}
+header{padding-top:env(safe-area-inset-top)}
+main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+#inst{display:none;min-height:36px;padding:0 12px;font-size:13px;background:var(--red);color:#fff;flex:none}
+#inst.on{display:inline-block}
+@media(display-mode:standalone){body{-webkit-tap-highlight-color:transparent}}
 </style>
 </head>
 <body>
-<header><div class="hd"><a class="logo" href="#top"><i></i>コマ語り</a><small>漫画の「この話」の感想を言い合う場所<br>※各配信アプリとは無関係の非公式サイト</small></div></header>
+<header><div class="hd"><a class="logo" href="#top"><i></i>コマ語り</a><button id="inst" type="button">アプリとして追加</button><small>漫画の「この話」の感想を言い合う場所<br>※各配信アプリとは無関係の非公式サイト</small></div></header>
 <main id="app"><p class="muted">読み込み中…</p></main>
 <div class="toast" id="toast" role="status"></div>
 <script type="module">
@@ -248,7 +260,24 @@ function handleErr(err){
   else toast('保存できませんでした。通信状態を確認してください');
 }
 
-window.addEventListener('hashchange',()=>{ window.scrollTo(0,0); draftStar=0; render(); });
+// アプリ化(PWA)
+if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+let deferred=null; const ib=$('#inst');
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferred=e; ib.classList.add('on'); });
+ib.onclick=async()=>{ if(!deferred) return; deferred.prompt(); await deferred.userChoice.catch(()=>{}); deferred=null; ib.classList.remove('on'); };
+window.addEventListener('appinstalled',()=>{ ib.classList.remove('on'); toast('ホーム画面に追加しました'); });
+
+// 閲覧数カウント(管理画面でだけ見られる)
+const ymd=()=>{ const d=new Date(); return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); };
+let trackQ=[];
+function track(){
+  if(!me){ trackQ.push(1); return; }
+  const r=route(), day=ymd(), wid=(r.v!=='home'&&/^[A-Za-z0-9_-]+$/.test(r.id))?r.id:null;
+  const first=ls.get('vd')!==day; if(first) ls.set('vd',day);
+  const data={pv:increment(1)}; if(first) data.uv=increment(1); if(wid) data.w={[wid]:increment(1)};
+  setDoc(doc(db,'stats','d-'+day),data,{merge:true}).catch(()=>{});
+}
+window.addEventListener('hashchange',()=>{ window.scrollTo(0,0); draftStar=0; render(); if(db) track(); });
 
 if(firebaseConfig.projectId==='ここに貼る'){
   setupErr='Firebaseの設定がまだ入っていません。index.html の firebaseConfig を自分のプロジェクトの値に書き換えてください。';
@@ -257,8 +286,11 @@ if(firebaseConfig.projectId==='ここに貼る'){
   const fb=initializeApp(firebaseConfig);
   db=getFirestore(fb);
   const auth=getAuth(fb);
-  onAuthStateChanged(auth,u=>{ if(u){ me=u.uid; render(); } });
-  signInAnonymously(auth).catch(()=>toast('匿名ログインに失敗しました(Firebaseで匿名認証を有効にしてください)'));
+  onAuthStateChanged(auth,u=>{
+    if(u){ me=u.uid; render(); if(trackQ.length){ trackQ=[]; track(); } }
+    else signInAnonymously(auth).catch(()=>toast('匿名ログインに失敗しました(Firebaseで匿名認証を有効にしてください)'));
+  });
+  track();
   const tm=setTimeout(()=>{ if(!worksReady){ worksReady=true; worksErr='作品一覧の読み込みに時間がかかっています。通信状態を確認してください。'; render(); } },10000);
   onSnapshot(collection(db,'works'), s=>{
     works=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at),last:x.last?ms(x.last):0}; });

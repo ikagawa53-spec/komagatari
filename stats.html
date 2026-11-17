@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>コマ語り 管理画面</title><link rel="icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: 気軽な読者同士のおしゃべり帳。にぎやかすぎず、読みやすく。
+IDEA: 漫画の原稿用紙とコマ割り。話数はコマ、感想は吹き出し。
+PICTURE: 話数グリッド(感想数で墨の濃さが変わるコマ)と吹き出し型の感想。
+COLOUR and TYPE: 原稿用紙の白、墨 #1b1b22、朱 #e2402c をひとつ。Dela Gothic One + Zen Kaku Gothic New。
+LAYOUT: 上部に細い帯、1カラム最大880px、スマホ優先。
+*/
+:root{color-scheme:light dark;--bg:light-dark(#fbfaf6,#15151b);--ink:light-dark(#1b1b22,#ecebe6);--sub:light-dark(#62616b,#a4a3ad);--line:light-dark(#1b1b22,#ecebe6);--soft:light-dark(#efede5,#22222b);--card:light-dark(#fff,#1c1c24);--red:#e2402c;--tone:light-dark(#1b1b22,#ecebe6)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Zen Kaku Gothic New",system-ui,sans-serif;overflow-x:clip}
+header{border-bottom:3px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:5}
+.hd{max-width:880px;margin:auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+.logo{font:24px/1 "Dela Gothic One",sans-serif;color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:8px}
+.logo i{display:inline-block;width:22px;height:22px;background:var(--red);border:3px solid var(--line);transform:rotate(-6deg)}
+.hd small{color:var(--sub);font-size:13px;margin-left:auto;text-align:right}
+main{max-width:880px;margin:auto;padding:20px 16px 80px}
+h1{font:clamp(26px,6vw,40px)/1.15 "Dela Gothic One",sans-serif;margin:6px 0 10px;text-wrap:balance}
+h2{font:20px/1.3 "Dela Gothic One",sans-serif;margin:28px 0 10px}
+.muted{color:var(--sub);font-size:14px}
+input,textarea,select{font:16px "Zen Kaku Gothic New",sans-serif;color:var(--ink);background:var(--card);border:2px solid var(--line);border-radius:8px;padding:10px 12px;width:100%;min-height:44px}
+textarea{min-height:110px;resize:vertical}
+input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+button{font:700 15px "Zen Kaku Gothic New",sans-serif;min-height:44px;padding:0 18px;border-radius:8px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.pri{background:var(--ink);color:var(--bg)}
+button.red{background:var(--red);color:#fff;border-color:var(--line)}
+button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>input{flex:1 1 200px}
+.note{border:2px dashed var(--sub);border-radius:10px;padding:12px 14px;color:var(--sub);font-size:14px;margin:14px 0}
+.works{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));margin-top:14px}
+.work{display:block;text-decoration:none;color:var(--ink);background:var(--card);border:3px solid var(--line);border-radius:4px;padding:14px;box-shadow:5px 5px 0 var(--line);transition:transform .12s}
+.work:hover{transform:translate(-2px,-2px)}
+.work b{display:block;font-size:18px;line-height:1.35;margin-bottom:6px}
+.work span{font-size:13px;color:var(--sub)}
+.back{display:inline-flex;align-items:center;min-height:44px;color:var(--sub);text-decoration:none;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:12px}
+.ep{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1/1;border:2px solid var(--line);text-decoration:none;color:var(--ink);background:var(--card);font-weight:700;font-size:18px;line-height:1.1}
+.ep small{font-size:12px;font-weight:500;color:var(--sub);margin-top:3px}
+.ep.h1{background:color-mix(in srgb,var(--tone) 14%,var(--card))}
+.ep.h2{background:color-mix(in srgb,var(--tone) 32%,var(--card))}
+.ep.h3{background:var(--tone);color:var(--bg)}.ep.h3 small{color:var(--bg)}
+.ep.new::after{content:"";position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:var(--red)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--sub);margin-top:8px}
+.legend i{display:inline-block;width:14px;height:14px;border:2px solid var(--line);vertical-align:-2px;margin-right:4px}
+.epnav{display:flex;justify-content:space-between;gap:8px;margin:6px 0 4px}
+.epnav a{flex:1;text-align:center;border:2px solid var(--line);border-radius:8px;min-height:44px;display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);font-weight:700;background:var(--card)}
+.epnav a[aria-disabled=true]{opacity:.35;pointer-events:none}
+.stat{display:flex;gap:18px;align-items:baseline;flex-wrap:wrap;margin:4px 0 14px}
+.stat b{font:30px/1 "Dela Gothic One",sans-serif}
+.stars{color:var(--red);letter-spacing:2px;white-space:nowrap}
+form.post{background:var(--card);border:3px solid var(--line);border-radius:4px;padding:14px;display:grid;gap:10px;box-shadow:5px 5px 0 var(--line)}
+.starpick{display:flex;gap:2px}
+.starpick button{border:0;background:none;font-size:28px;min-height:44px;width:44px;padding:0;color:var(--sub)}
+.starpick button.on{color:var(--red)}
+.chk{display:flex;align-items:center;gap:8px;font-size:15px;min-height:44px}
+.chk input{width:22px;height:22px;min-height:0;accent-color:var(--red)}
+.cmts{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:16px}
+.bub{position:relative;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:12px 16px;margin-left:10px}
+.bub::before{content:"";position:absolute;left:-12px;top:18px;width:16px;height:16px;background:var(--card);border-left:2px solid var(--line);border-bottom:2px solid var(--line);transform:rotate(45deg) skew(10deg,10deg)}
+.bub .meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--sub);margin-bottom:4px}
+.bub .meta b{color:var(--ink);font-size:14px}
+.bub p{margin:0;white-space:pre-wrap;word-break:break-word}
+.spo p{filter:blur(6px);user-select:none;cursor:pointer}
+.spo .tag{background:var(--red);color:#fff;border-radius:4px;padding:0 6px;font-weight:700}
+.del{margin-left:auto;min-height:32px;padding:0 10px;font-size:13px;border-width:1px}
+.sort{display:flex;gap:6px;margin-top:20px}
+.sort button{min-height:36px;font-size:13px;padding:0 12px}
+.sort button.on{background:var(--ink);color:var(--bg)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+@media(prefers-reduced-motion:reduce){.work,.toast{transition:none}}
+header{padding-top:env(safe-area-inset-top)}
+main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+#inst{display:none;min-height:36px;padding:0 12px;font-size:13px;background:var(--red);color:#fff;flex:none}
+#inst.on{display:inline-block}
+@media(display-mode:standalone){body{-webkit-tap-highlight-color:transparent}}
+
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
+.kp div{border:3px solid var(--line);background:var(--card);padding:12px;font-size:13px;color:var(--sub);box-shadow:4px 4px 0 var(--line)}
+.kp b{display:block;font:30px/1.1 "Dela Gothic One",sans-serif;color:var(--ink)}
+.bars{display:grid;gap:6px}.br{display:grid;grid-template-columns:44px 1fr 92px;gap:8px;align-items:center;font-size:14px}
+.br i{height:16px;background:var(--soft);display:block}.br em{display:block;height:100%;background:var(--red)}
+.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.n small{color:var(--sub)}
+.tp{padding-left:22px}.tp li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--soft)}.tp a,.bub a{color:var(--ink)}
+</style></head><body>
+<header><div class="hd"><a class="logo" href="./"><i></i>コマ語り</a><small>管理画面</small></div></header>
+<main id="app"><p class="muted">読み込み中…</p></main><div class="toast" id="toast" role="status"></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, getDocs, query, orderBy, limit, doc, deleteDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyCeau3wB2ZsUUfV8k-SJXh4EgA4l_VRn6c",
+  authDomain: "komagatari-af475.firebaseapp.com",
+  projectId: "komagatari-af475",
+  storageBucket: "komagatari-af475.firebasestorage.app",
+  messagingSenderId: "100781524904",
+  appId: "1:100781524904:web:2f011520e9c414c046bf9d"
+};
+const $=s=>document.querySelector(s), app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2600);};
+const ms=v=>v&&v.toMillis?v.toMillis():0;
+const key=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+const fb=initializeApp(firebaseConfig), auth=getAuth(fb), db=getFirestore(fb);
+
+function login(){
+  app.innerHTML=`<h1>管理画面</h1><p class="muted">閲覧数や最近の感想は、管理者のGoogleアカウントでログインしたときだけ見られます。</p><button class="pri" id="lg">Googleでログイン</button>`;
+  $('#lg').onclick=()=>{ const p=new GoogleAuthProvider(); signInWithPopup(auth,p).catch(e=>{ if(String(e.code).includes('popup')) signInWithRedirect(auth,p); else toast('ログインできませんでした'); }); };
+}
+
+async function load(u){
+  app.innerHTML='<p class="muted">読み込み中…</p>';
+  let st,ws,cs;
+  try{ [st,ws,cs]=await Promise.all([getDocs(collection(db,'stats')),getDocs(collection(db,'works')),getDocs(query(collection(db,'c'),orderBy('at','desc'),limit(30)))]); }
+  catch(e){ app.innerHTML=`<h1>見る権限がありません</h1><p class="muted">${esc(u.email||'')} では閲覧できません。ルールに書いた管理者のアカウントでログインしてください。</p><button id="lo">ログアウト</button>`; $('#lo').onclick=()=>signOut(auth); return; }
+  const S={}; st.docs.forEach(d=>S[d.id.slice(2)]=d.data());
+  const W={}; ws.docs.forEach(d=>W[d.id]=d.data());
+  const days=[...Array(14)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()-i);return d;});
+  const today=S[key(days[0])]||{}, max=Math.max(1,...days.map(d=>(S[key(d)]||{}).pv||0));
+  const pop={}; days.slice(0,7).forEach(d=>Object.entries((S[key(d)]||{}).w||{}).forEach(([k,v])=>pop[k]=(pop[k]||0)+v));
+  const top=Object.entries(pop).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const total=Object.values(S).reduce((a,x)=>a+(x.pv||0),0), cm=Object.values(W).reduce((a,x)=>a+(x.n||0),0);
+  app.innerHTML=`<div class="row" style="justify-content:space-between"><h1 style="margin:0">管理画面</h1><div class="row"><button id="rl">更新</button><button id="lo">ログアウト</button></div></div>
+  <p class="muted">${esc(u.email)} でログイン中・この画面はあなたにしか見えません</p>
+  <div class="kp"><div><b>${today.pv||0}</b>今日の閲覧数</div><div><b>${today.uv||0}</b>今日の訪問者</div><div><b>${total}</b>累計閲覧数</div><div><b>${ws.size}</b>作品 / <b style="font-size:inherit">${cm}</b>感想</div></div>
+  <h2>過去14日の閲覧数</h2><div class="bars">${days.map(d=>{const x=S[key(d)]||{};return `<div class="br"><span>${d.getMonth()+1}/${d.getDate()}</span><i><em style="width:${(x.pv||0)/max*100}%"></em></i><span class="n">${x.pv||0}<small> / ${x.uv||0}人</small></span></div>`}).join('')}</div>
+  <p class="muted">閲覧数 / 訪問者数(1日1人1回で数えます)</p>
+  <h2>よく見られた作品(7日間)</h2>${top.length?`<ol class="tp">${top.map(([k,v])=>`<li><a href="./#w-${esc(k)}">${esc(W[k]?.title||'(削除済み)')}</a><span class="n">${v}回</span></li>`).join('')}</ol>`:'<div class="note">まだデータがありません。</div>'}
+  <h2>最近の感想(30件)</h2><ul class="cmts">${cs.docs.map(d=>{const c=d.data();return `<li class="bub"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b><a href="./#w-${esc(c.w)}-e-${c.ep}">${esc(W[c.w]?.title||'?')} 第${c.ep}話</a><span>${ms(c.at)?new Date(ms(c.at)).toLocaleString('ja-JP'):''}</span><button class="del" data-id="${d.id}" data-w="${esc(c.w)}">削除</button></div><p>${esc(c.text)}</p></li>`}).join('')||'<div class="note">まだ感想がありません。</div>'}</ul>`;
+  $('#rl').onclick=()=>load(u); $('#lo').onclick=()=>signOut(auth);
+  app.querySelectorAll('.del').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='本当に削除';b.classList.add('red');return;}
+    try{ await deleteDoc(doc(db,'c',b.dataset.id)); await updateDoc(doc(db,'works',b.dataset.w),{n:increment(-1)}).catch(()=>{}); b.closest('li').remove(); toast('削除しました'); }catch(e){ toast('削除できませんでした'); }
+  });
+}
+onAuthStateChanged(auth,u=>{ if(u&&!u.isAnonymous) load(u); else login(); });
+</script></body></html>

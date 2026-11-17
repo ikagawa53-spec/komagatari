@@ -1,0 +1,17 @@
+{
+  "name": "コマ語り 話ごと感想帳",
+  "short_name": "コマ語り",
+  "description": "漫画の話ごとに感想と★評価を言い合える非公式の感想帳",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15151b",
+  "theme_color": "#15151b",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
