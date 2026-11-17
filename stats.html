@@ -81,7 +81,7 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 #inst.on{display:inline-block}
 @media(display-mode:standalone){body{-webkit-tap-highlight-color:transparent}}
 
-.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:14px 0}
 .kp div{border:3px solid var(--line);background:var(--card);padding:12px;font-size:13px;color:var(--sub);box-shadow:4px 4px 0 var(--line)}
 .kp b{display:block;font:30px/1.1 "Dela Gothic One",sans-serif;color:var(--ink)}
 .bars{display:grid;gap:6px}.br{display:grid;grid-template-columns:44px 1fr 92px;gap:8px;align-items:center;font-size:14px}
@@ -129,7 +129,7 @@ async function load(u){
   const total=Object.values(S).reduce((a,x)=>a+(x.pv||0),0), cm=Object.values(W).reduce((a,x)=>a+(x.n||0),0);
   app.innerHTML=`<div class="row" style="justify-content:space-between"><h1 style="margin:0">管理画面</h1><div class="row"><button id="rl">更新</button><button id="lo">ログアウト</button></div></div>
   <p class="muted">${esc(u.email)} でログイン中・この画面はあなたにしか見えません</p>
-  <div class="kp"><div><b>${today.pv||0}</b>今日の閲覧数</div><div><b>${today.uv||0}</b>今日の訪問者</div><div><b>${total}</b>累計閲覧数</div><div><b>${ws.size}</b>作品 / <b style="font-size:inherit">${cm}</b>感想</div></div>
+  <div class="kp"><div><b>${today.pv||0}</b>今日の閲覧数</div><div><b>${today.uv||0}</b>今日の訪問者</div><div><b>${total}</b>累計閲覧数</div><div><b>${ws.size}</b>作品数</div><div><b>${cm}</b>感想数</div></div>
   <h2>過去14日の閲覧数</h2><div class="bars">${days.map(d=>{const x=S[key(d)]||{};return `<div class="br"><span>${d.getMonth()+1}/${d.getDate()}</span><i><em style="width:${(x.pv||0)/max*100}%"></em></i><span class="n">${x.pv||0}<small> / ${x.uv||0}人</small></span></div>`}).join('')}</div>
   <p class="muted">閲覧数 / 訪問者数(1日1人1回で数えます)</p>
   <h2>よく見られた作品(7日間)</h2>${top.length?`<ol class="tp">${top.map(([k,v])=>`<li><a href="./#w-${esc(k)}">${esc(W[k]?.title||'(削除済み)')}</a><span class="n">${v}回</span></li>`).join('')}</ol>`:'<div class="note">まだデータがありません。</div>'}
