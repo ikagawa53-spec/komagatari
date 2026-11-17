@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 管理者(このGoogleアカウントだけが閲覧数を見たり、感想を消したりできる)
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'ADMIN_EMAIL'
+        && request.auth.token.email_verified == true;
+    }
+
+    // 閲覧数: 誰でも+1だけできる / 見られるのは管理者だけ
+    match /stats/{day} {
+      allow read: if isAdmin();
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['pv','uv','w'])
+        && request.resource.data.pv == 1;
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pv','uv','w'])
+        && request.resource.data.pv == resource.data.pv + 1
+        && request.resource.data.get('uv', 0) <= resource.data.get('uv', 0) + 1
+        && request.resource.data.get('w', {}).size() <= resource.data.get('w', {}).size() + 1;
+      allow delete: if isAdmin();
+    }
+
+    // 作品: 誰でも読める / ログイン(匿名)した人が登録できる / 削除は管理者のみ(コンソールから)
+    match /works/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['title','eps','by','at','n'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.eps is int
+        && request.resource.data.eps >= 1 && request.resource.data.eps <= 3000
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.n == 0;
+      // 更新できるのは「最新話数(増やすだけ)」「感想数(±1)」「最終投稿時刻」のみ
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['eps','n','last'])
+        && request.resource.data.eps is int
+        && request.resource.data.eps >= resource.data.eps
+        && request.resource.data.eps <= 3000
+        && request.resource.data.n is int
+        && request.resource.data.n >= resource.data.n - 1
+        && request.resource.data.n <= resource.data.n + 1
+        && (!('last' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.last == request.time);
+      allow delete: if isAdmin();
+    }
+
+    // 感想: 誰でも読める / 匿名ログインで投稿 / 削除は書いた本人のみ / 編集不可
+    match /c/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['w','ep','text','star','sp','name','by','at'])
+        && request.resource.data.w is string
+        && exists(/databases/$(database)/documents/works/$(request.resource.data.w))
+        && request.resource.data.ep is int
+        && request.resource.data.ep >= 1 && request.resource.data.ep <= 3000
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 1000
+        && request.resource.data.star is int
+        && request.resource.data.star >= 0 && request.resource.data.star <= 5
+        && request.resource.data.sp is bool
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 20
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time;
+      allow update: if false;
+      allow delete: if isAdmin() || (request.auth != null && resource.data.by == request.auth.uid);
+    }
+
+    // タグの投票: 誰でも読める / 1人1件(作品はep=0)を自分で書き換え・削除
+    match /tv/{id} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['w','ep','by','tags'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.w is string
+        && request.resource.data.ep is int
+        && request.resource.data.ep >= 0 && request.resource.data.ep <= 3000
+        && id == request.auth.uid + '_' + request.resource.data.w + '_' + string(request.resource.data.ep)
+        && request.resource.data.tags is list
+        && request.resource.data.tags.size() >= 1 && request.resource.data.tags.size() <= 5;
+      allow delete: if isAdmin() || (request.auth != null && resource.data.by == request.auth.uid);
+    }
+
+    // 話の見出し: 承認済みだけ公開 / 1話につき1件だけ提案できる / 承認・修正・削除は管理者
+    match /hl/{id} {
+      allow read: if resource == null || resource.data.ok == true || isAdmin()
+        || (request.auth != null && resource.data.by == request.auth.uid);
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['w','ep','text','by','ok','at'])
+        && request.resource.data.w is string
+        && request.resource.data.ep is int
+        && request.resource.data.ep >= 1 && request.resource.data.ep <= 3000
+        && id == request.resource.data.w + '_' + string(request.resource.data.ep)
+        && exists(/databases/$(database)/documents/works/$(request.resource.data.w))
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 30
+        && request.resource.data.ok == false
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time;
+      allow update, delete: if isAdmin();
+    }
+
+    // 読んだアプリ: 誰でも読める / 1人1作品1件を自分で書き換え・削除
+    match /ra/{id} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['w','by','apps'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.w is string
+        && id == request.auth.uid + '_' + request.resource.data.w
+        && request.resource.data.apps is list
+        && request.resource.data.apps.size() >= 1 && request.resource.data.apps.size() <= 3;
+      allow delete: if isAdmin() || (request.auth != null && resource.data.by == request.auth.uid);
+    }
+
+    // 読み直しの助走(何話前から読むか): 名前なしで集計 / 1人1話1件を自分で書き換え・削除
+    match /jo/{id} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['w','ep','by','lead'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.w is string
+        && request.resource.data.ep is int
+        && request.resource.data.ep >= 1 && request.resource.data.ep <= 3000
+        && id == request.auth.uid + '_' + request.resource.data.w + '_' + string(request.resource.data.ep)
+        && request.resource.data.lead is int
+        && request.resource.data.lead >= 0 && request.resource.data.lead <= 10;
+      allow delete: if isAdmin() || (request.auth != null && resource.data.by == request.auth.uid);
+    }
+  }
+}
