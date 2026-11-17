@@ -88,13 +88,14 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 .br i{height:16px;background:var(--soft);display:block}.br em{display:block;height:100%;background:var(--red)}
 .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.n small{color:var(--sub)}
 .tp{padding-left:22px}.tp li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--soft)}.tp a,.bub a{color:var(--ink)}
+.hq{display:grid;gap:10px}.hqi{border:2px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:8px;background:var(--card)}.hqi a{color:var(--ink);font-weight:700}
 </style></head><body>
 <header><div class="hd"><a class="logo" href="./"><i></i>コマ語り</a><small>管理画面</small></div></header>
 <main id="app"><p class="muted">読み込み中…</p></main><div class="toast" id="toast" role="status"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, getDocs, query, orderBy, limit, doc, deleteDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, getDocs, query, orderBy, limit, where, doc, deleteDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 const firebaseConfig = {
   apiKey: "AIzaSyCeau3wB2ZsUUfV8k-SJXh4EgA4l_VRn6c",
   authDomain: "komagatari-af475.firebaseapp.com",
@@ -117,8 +118,8 @@ function login(){
 
 async function load(u){
   app.innerHTML='<p class="muted">読み込み中…</p>';
-  let st,ws,cs;
-  try{ [st,ws,cs]=await Promise.all([getDocs(collection(db,'stats')),getDocs(collection(db,'works')),getDocs(query(collection(db,'c'),orderBy('at','desc'),limit(30)))]); }
+  let st,ws,cs,hs;
+  try{ [hs,st,ws,cs]=await Promise.all([getDocs(query(collection(db,'hl'),where('ok','==',false))),getDocs(collection(db,'stats')),getDocs(collection(db,'works')),getDocs(query(collection(db,'c'),orderBy('at','desc'),limit(30)))]); }
   catch(e){ app.innerHTML=`<h1>見る権限がありません</h1><p class="muted">${esc(u.email||'')} では閲覧できません。ルールに書いた管理者のアカウントでログインしてください。</p><button id="lo">ログアウト</button>`; $('#lo').onclick=()=>signOut(auth); return; }
   const S={}; st.docs.forEach(d=>S[d.id.slice(2)]=d.data());
   const W={}; ws.docs.forEach(d=>W[d.id]=d.data());
@@ -130,10 +131,15 @@ async function load(u){
   app.innerHTML=`<div class="row" style="justify-content:space-between"><h1 style="margin:0">管理画面</h1><div class="row"><button id="rl">更新</button><button id="lo">ログアウト</button></div></div>
   <p class="muted">${esc(u.email)} でログイン中・この画面はあなたにしか見えません</p>
   <div class="kp"><div><b>${today.pv||0}</b>今日の閲覧数</div><div><b>${today.uv||0}</b>今日の訪問者</div><div><b>${total}</b>累計閲覧数</div><div><b>${ws.size}</b>作品数</div><div><b>${cm}</b>感想数</div></div>
+  <h2>見出しの確認待ち(${hs.size}件)</h2>${hs.size?`<div class="hq">${hs.docs.map(d=>{const h=d.data();return `<div class="hqi" data-id="${d.id}"><a href="./#w-${esc(h.w)}-e-${h.ep}">${esc(W[h.w]?.title||'?')} 第${h.ep}話</a><input value="${esc(h.text)}" maxlength="30" aria-label="見出し"><div class="row"><button class="red ok">承認</button><button class="ng">却下</button></div></div>`}).join('')}</div>`:'<div class="note">確認待ちの見出しはありません。</div>'}
   <h2>過去14日の閲覧数</h2><div class="bars">${days.map(d=>{const x=S[key(d)]||{};return `<div class="br"><span>${d.getMonth()+1}/${d.getDate()}</span><i><em style="width:${(x.pv||0)/max*100}%"></em></i><span class="n">${x.pv||0}<small> / ${x.uv||0}人</small></span></div>`}).join('')}</div>
   <p class="muted">閲覧数 / 訪問者数(1日1人1回で数えます)</p>
   <h2>よく見られた作品(7日間)</h2>${top.length?`<ol class="tp">${top.map(([k,v])=>`<li><a href="./#w-${esc(k)}">${esc(W[k]?.title||'(削除済み)')}</a><span class="n">${v}回</span></li>`).join('')}</ol>`:'<div class="note">まだデータがありません。</div>'}
   <h2>最近の感想(30件)</h2><ul class="cmts">${cs.docs.map(d=>{const c=d.data();return `<li class="bub"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b><a href="./#w-${esc(c.w)}-e-${c.ep}">${esc(W[c.w]?.title||'?')} 第${c.ep}話</a><span>${ms(c.at)?new Date(ms(c.at)).toLocaleString('ja-JP'):''}</span><button class="del" data-id="${d.id}" data-w="${esc(c.w)}">削除</button></div><p>${esc(c.text)}</p></li>`}).join('')||'<div class="note">まだ感想がありません。</div>'}</ul>`;
+  app.querySelectorAll('.hqi').forEach(el=>{ const id=el.dataset.id;
+    el.querySelector('.ok').onclick=async()=>{ const t=el.querySelector('input').value.trim().slice(0,30); if(!t) return toast('見出しが空です'); try{ await updateDoc(doc(db,'hl',id),{text:t,ok:true}); el.remove(); toast('承認しました'); }catch(e){ toast('保存できませんでした'); } };
+    el.querySelector('.ng').onclick=async()=>{ try{ await deleteDoc(doc(db,'hl',id)); el.remove(); toast('却下しました'); }catch(e){ toast('削除できませんでした'); } };
+  });
   $('#rl').onclick=()=>load(u); $('#lo').onclick=()=>signOut(auth);
   app.querySelectorAll('.del').forEach(b=>b.onclick=async()=>{
     if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='本当に削除';b.classList.add('red');return;}

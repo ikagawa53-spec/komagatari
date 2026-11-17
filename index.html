@@ -92,6 +92,27 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 #inst{display:none;min-height:36px;padding:0 12px;font-size:13px;background:var(--red);color:#fff;flex:none}
 #inst.on{display:inline-block}
 @media(display-mode:standalone){body{-webkit-tap-highlight-color:transparent}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:2px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);text-decoration:none;font-weight:700;font-size:14px;cursor:pointer}
+.chip small{font-weight:500;color:var(--sub)}
+.chips.ep .chip{border-style:dashed}
+.chip.add{border-style:dashed;color:var(--sub);font-weight:500}
+.chip.pick.on{background:var(--red);border-color:var(--red);color:#fff}
+.prog{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--soft);border-radius:8px;padding:6px 6px 6px 14px;font-weight:700;margin:4px 0 10px}
+.prog button{min-height:36px;margin-left:auto;font-size:13px}
+.ep.rd{box-shadow:inset 0 -5px 0 var(--red)}
+.hits{display:grid;gap:8px}
+.hit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:10px 14px;border:2px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);text-decoration:none}
+.hit span{grid-column:1;font-size:14px;color:var(--sub)}.hit .n{grid-column:2;grid-row:1/3;align-self:center;color:var(--ink);font-weight:700}
+.hit .blur{filter:blur(4px)}
+.tag{background:var(--red);color:#fff;border-radius:4px;padding:0 6px;font-weight:700;font-style:normal;font-size:12px}
+.hl{font:20px/1.4 "Dela Gothic One",sans-serif;margin:6px 0 10px}
+.hlf input{flex:1 1 200px}
+.gate{border:3px solid var(--line);background:var(--card);padding:18px;border-radius:4px;box-shadow:5px 5px 0 var(--line);margin-top:12px}
+.gate b{font:20px/1.3 "Dela Gothic One",sans-serif}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;z-index:20}
+#modal.on{display:flex}
+.sheet{background:var(--bg);color:var(--ink);width:min(560px,100%);border:3px solid var(--line);border-bottom:0;border-radius:14px 14px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
 </style>
 </head>
 <body>
@@ -101,7 +122,7 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, onSnapshot, query, where, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // Firebase設定(公開して問題ない値)
 const firebaseConfig = {
@@ -113,10 +134,17 @@ const firebaseConfig = {
   appId: "1:100781524904:web:2f011520e9c414c046bf9d"
 };
 
+// ===== タグ一覧(ここを書き換えるだけで変更できます) =====
+const WORK_TAGS = ['覚醒','成り上がり','復讐','異世界','転生','バトル','恋愛','胸キュン','ダーク','ほのぼの','ギャグ','頭脳戦','ミステリー','泣ける','作画が神','ハッピーエンド'];
+const EP_TAGS   = ['クライマックス','涙腺崩壊','覚醒','名バトル','伏線回収','胸アツ','神作画','ざまぁ','衝撃展開','胸キュン','爆笑','鬱展開'];
+const MAX_WT = 5, MAX_ET = 3;   // 1人が付けられるタグの数(作品 / 話)
+// ===========================================================
+const ALL_TAGS = [...new Set([...WORK_TAGS, ...EP_TAGS])];
+
 const $ = s => document.querySelector(s);
 const app = $('#app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const norm = s => s.normalize('NFKC').replace(/\s+/g,'').toLowerCase();
+const norm = s => String(s||'').normalize('NFKC').replace(/\s+/g,'').toLowerCase();
 const toast = m => { const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('on'),2600); };
 const ms = v => v && v.toMillis ? v.toMillis() : (typeof v==='number' ? v : Date.now());
 const ago = t => { const d=(Date.now()-t)/1000; if(d<60) return 'たった今'; if(d<3600) return Math.floor(d/60)+'分前'; if(d<86400) return Math.floor(d/3600)+'時間前'; if(d<86400*30) return Math.floor(d/86400)+'日前'; const x=new Date(t); return `${x.getFullYear()}/${x.getMonth()+1}/${x.getDate()}`; };
@@ -125,49 +153,77 @@ const ls = { get:k=>{ try{return localStorage.getItem(k)||''}catch(e){return ''}
 
 let db=null, me=null, setupErr='';
 let works=[], worksReady=false, worksErr='';
-let cmts=[], cmtWork=null, cmtUnsub=null, cmtReady=false;
-let sortMode='new', q='', draftStar=0, revealed=new Set();
+let cur=null, unsubs=[], cmts=[], cmtReady=false, tvW=[], hlW={};
+let allHl=[], allTv=null, allTvAt=0, tvLoading=false;
+let sortMode='new', q='', draftStar=0, revealed=new Set(), peek=new Set(), askedProg=new Set(), hlMine={};
+
+// ===== どこまで読んだ(この端末にだけ保存) =====
+const prog = wid => { const v=ls.get('rd:'+wid); if(!v) return null; if(v==='all') return {all:true,n:Infinity}; if(v==='later') return {later:true,n:0}; return {n:+v||0}; };
+const setProg = (wid,v) => ls.set('rd:'+wid, String(v));
+const isRead = (wid,ep) => { const p=prog(wid); return (!!p && (p.all || ep<=p.n)) || peek.has(wid+'_'+ep); };
+const bumpProg = (wid,ep) => { const p=prog(wid); if(p&&p.all) return; if(!p||p.later||ep>p.n) setProg(wid,ep); };
+const progLabel = p => !p ? 'どこまで読んだか未設定' : p.all ? '最新話まで読んだ' : p.later ? 'どこまで読んだか未設定' : p.n===0 ? 'まだ読んでいない' : `第${p.n}話まで読んだ`;
+
+// ===== モーダル =====
+const modal=document.createElement('div'); modal.id='modal'; document.body.append(modal);
+const closeModal=()=>{ modal.className=''; modal.innerHTML=''; };
+const openModal=(html,bind)=>{ modal.innerHTML=`<div class="sheet" role="dialog" aria-modal="true">${html}</div>`; modal.className='on'; modal.onclick=e=>{ if(e.target===modal) closeModal(); }; bind&&bind(modal); };
 
 function route(){
   const h=location.hash.slice(1);
   let m=h.match(/^w-([A-Za-z0-9_-]+)-e-(\d+)$/); if(m) return {v:'ep',id:m[1],ep:+m[2]};
   m=h.match(/^w-([A-Za-z0-9_-]+)$/); if(m) return {v:'work',id:m[1]};
+  m=h.match(/^t-(\d+)$/); if(m) return {v:'tag',i:+m[1]};
   return {v:'home'};
 }
 
-function watchCmts(id){
-  if(cmtWork===id) return;
-  cmtUnsub && cmtUnsub(); cmtWork=id; cmts=[]; cmtReady=false;
+function watchWork(id){
+  if(cur===id) return;
+  unsubs.forEach(u=>u()); unsubs=[]; cur=id; cmts=[]; cmtReady=false; tvW=[]; hlW={};
   const tm=setTimeout(()=>{ if(!cmtReady){ cmtReady='slow'; render(); } },10000);
-  cmtUnsub=onSnapshot(query(collection(db,'c'),where('w','==',id)), s=>{
-    cmts=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at)}; });
-    cmtReady=true; clearTimeout(tm); render();
-  }, e=>{ clearTimeout(tm); cmtReady=true; toast('感想を読み込めませんでした'); render(); });
+  unsubs.push(onSnapshot(query(collection(db,'c'),where('w','==',id)), s=>{
+    cmts=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at)}; }); cmtReady=true; clearTimeout(tm); render();
+  }, ()=>{ clearTimeout(tm); cmtReady=true; toast('感想を読み込めませんでした'); render(); }));
+  unsubs.push(onSnapshot(query(collection(db,'tv'),where('w','==',id)), s=>{ tvW=s.docs.map(d=>d.data()); render(); }, ()=>{}));
+  unsubs.push(onSnapshot(query(collection(db,'hl'),where('w','==',id),where('ok','==',true)), s=>{ hlW={}; s.docs.forEach(d=>{const x=d.data(); hlW[x.ep]=x.text;}); render(); }, ()=>{}));
 }
+
+// タグ集計
+const countTags = (docs,ep,list) => { const m={}; docs.forEach(d=>{ if(d.ep===ep) (d.tags||[]).forEach(t=>{ if(list.includes(t)) m[t]=(m[t]||0)+1; }); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
+const myTags = ep => (tvW.find(d=>d.by===me && d.ep===ep)||{}).tags||[];
+const chips = (arr,more='') => arr.length ? `<div class="chips">${arr.map(([t,n])=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}<small>${n}</small></a>`).join('')}${more}</div>` : more?`<div class="chips">${more}</div>`:'';
 
 function render(){
   const r=route();
   if(setupErr){ app.innerHTML=`<h1>準備中です</h1><div class="note">${esc(setupErr)}</div>`; return; }
   if(r.v==='home') return home();
+  if(r.v==='tag') return tagView(r.i);
   const w=works.find(x=>x.id===r.id);
   if(!w){ app.innerHTML = worksReady ? `<a class="back" href="#top">← 作品一覧へ</a><h1>作品が見つかりません</h1><p class="muted">削除されたか、リンクが間違っているかもしれません。</p>` : `<p class="muted">読み込み中…</p>`; return; }
-  watchCmts(w.id);
+  watchWork(w.id);
   r.v==='work' ? workView(w) : epView(w, r.ep);
 }
 
 function home(){
-  const list=works.filter(w=>!q || norm(w.title).includes(norm(q))).sort((a,b)=>(b.last||b.at||0)-(a.last||a.at||0));
+  const nq=norm(q);
+  const list=works.filter(w=>!nq || norm(w.title).includes(nq)).sort((a,b)=>(b.last||b.at||0)-(a.last||a.at||0));
+  const tagHits=nq?ALL_TAGS.filter(t=>norm(t).includes(nq)):[];
+  const hlHits=nq?allHl.filter(h=>norm(h.text).includes(nq)).slice(0,20):[];
+  const title=id=>(works.find(w=>w.id===id)||{}).title||'';
   app.innerHTML=`
   <h1>読んだ話の感想、<br>ここで言い合おう。</h1>
-  <p class="muted">作品と話数をそろえて登録すると、話ごとに感想・★評価を書き込めます。登録不要・誰でも使えます。作品名は配信アプリの表記どおりに入れると探しやすくなります。</p>
+  <p class="muted">作品と話数をそろえて登録すると、話ごとに感想・★評価・タグを付けられます。登録不要・誰でも使えます。作品名は配信アプリの表記どおりに入れると探しやすくなります。</p>
   <form id="addf" class="row" style="margin-top:14px">
-    <input id="q" placeholder="作品名で検索 / 新しく登録" value="${esc(q)}" autocomplete="off" aria-label="作品名">
+    <input id="q" placeholder="作品名・見出し・タグで検索 / 作品を登録" value="${esc(q)}" autocomplete="off" aria-label="検索">
     <input id="neps" type="number" min="1" max="3000" inputmode="numeric" placeholder="最新話数" style="flex:0 1 120px" aria-label="最新話数">
     <button class="pri" ${me?'':'disabled'}>作品を登録</button>
   </form>
   ${worksErr?`<div class="note">${esc(worksErr)}</div>`:''}
-  ${!worksReady?'<p class="muted">作品を読み込み中…</p>': !works.length?'<div class="note">まだ作品がありません。上の欄に作品名と最新話数を入れて、最初の1作品を登録してください。</div>': !list.length?`<div class="note">「${esc(q)}」は未登録です。最新話数を入れて「作品を登録」を押すと追加できます。</div>`:''}
-  <div class="works">${list.map(w=>`<a class="work" href="#w-${w.id}"><b>${esc(w.title)}</b><span>全${w.eps}話 ・ 感想 ${w.n||0}件${w.last?' ・ '+ago(w.last):''}</span></a>`).join('')}</div>`;
+  ${tagHits.length?`<div class="chips" style="margin-top:12px">${tagHits.map(t=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)} のタグで探す</a>`).join('')}</div>`:''}
+  ${!worksReady?'<p class="muted">作品を読み込み中…</p>': !works.length?'<div class="note">まだ作品がありません。上の欄に作品名と最新話数を入れて、最初の1作品を登録してください。</div>': (!list.length&&!hlHits.length&&!tagHits.length)?`<div class="note">「${esc(q)}」は見つかりません。作品名なら、最新話数を入れて「作品を登録」を押すと追加できます。</div>`:''}
+  <div class="works">${list.map(w=>`<a class="work" href="#w-${w.id}"><b>${esc(w.title)}</b><span>全${w.eps}話 ・ 感想 ${w.n||0}件${w.last?' ・ '+ago(w.last):''}</span></a>`).join('')}</div>
+  ${hlHits.length?`<h2>見出しが一致した回</h2><div class="hits">${hlHits.map(h=>`<a class="hit" href="#w-${h.w}-e-${h.ep}"><b>${esc(title(h.w))}</b><span>第${h.ep}話「${esc(h.text)}」</span></a>`).join('')}</div>`:''}
+  ${!nq?`<h2>タグから探す</h2><p class="muted">上が作品のタグ、下が「この回が熱い」話のタグです。</p><div class="chips">${WORK_TAGS.map(t=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}</a>`).join('')}</div><div class="chips ep">${EP_TAGS.map(t=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}</a>`).join('')}</div>`:''}`;
   const qi=$('#q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; home(); const n=$('#q'); n.focus(); n.setSelectionRange(p,p); };
   $('#addf').onsubmit=async e=>{
     e.preventDefault();
@@ -181,28 +237,89 @@ function home(){
   };
 }
 
+function tagView(i){
+  const tag=ALL_TAGS[i];
+  if(!tag){ location.hash='top'; return; }
+  const isW=WORK_TAGS.includes(tag), isE=EP_TAGS.includes(tag);
+  if(!allTv || Date.now()-allTvAt>60000){
+    app.innerHTML=`<a class="back" href="#top">← 作品一覧へ</a><h1>#${esc(tag)}</h1><p class="muted">読み込み中…</p>`;
+    if(!tvLoading){ tvLoading=true; getDocs(collection(db,'tv')).then(s=>{ allTv=s.docs.map(d=>d.data()); }).catch(()=>{ allTv=[]; }).finally(()=>{ allTvAt=Date.now(); tvLoading=false; render(); }); }
+    return;
+  }
+  const W={}, E={};
+  allTv.forEach(d=>{ if(!(d.tags||[]).includes(tag)) return; if(d.ep===0) W[d.w]=(W[d.w]||0)+1; else { const k=d.w+'_'+d.ep; E[k]=(E[k]||0)+1; } });
+  const wl=Object.entries(W).filter(([id])=>works.some(w=>w.id===id)).sort((a,b)=>b[1]-a[1]||((works.find(w=>w.id===b[0])||{}).n||0)-((works.find(w=>w.id===a[0])||{}).n||0)).slice(0,30);
+  const el=Object.entries(E).filter(([k])=>works.some(w=>w.id===k.split('_')[0])).sort((a,b)=>b[1]-a[1]).slice(0,50);
+  const hlOf=(w,ep)=>(allHl.find(h=>h.w===w&&h.ep===ep)||{}).text;
+  const T=id=>(works.find(w=>w.id===id)||{});
+  app.innerHTML=`<a class="back" href="#top">← 作品一覧へ</a>
+  <h1>#${esc(tag)}</h1>
+  ${isW?`<h2>このタグが付いた作品</h2>${wl.length?`<div class="hits">${wl.map(([id,n])=>`<a class="hit" href="#w-${id}"><b>${esc(T(id).title)}</b><span>全${T(id).eps}話 ・ 感想${T(id).n||0}件</span><span class="n">${n}票</span></a>`).join('')}</div>`:'<div class="note">まだこのタグが付いた作品はありません。作品ページから付けられます。</div>'}`:''}
+  ${isE?`<h2>このタグが付いた回</h2><p class="muted">まだ読んでいない回は、見出しを隠しています。</p>${el.length?`<div class="hits">${el.map(([k,n])=>{ const [id,ep]=k.split('_'); const e=+ep, rd=isRead(id,e), h=hlOf(id,e);
+      return `<a class="hit" href="#w-${id}-e-${e}"><b>${esc(T(id).title)}</b><span>第${e}話${h?(rd?`「${esc(h)}」`:' <em class="tag">未読</em>'):(rd?'':' <em class="tag">未読</em>')}</span><span class="n">${n}票</span></a>`; }).join('')}</div>`:'<div class="note">まだこのタグが付いた回はありません。話のページから付けられます。</div>'}`:''}`;
+}
+
 function epStats(){
   const m={};
   cmts.forEach(c=>{ const s=m[c.ep]||(m[c.ep]={n:0,last:0}); s.n++; s.last=Math.max(s.last,c.at||0); });
   return m;
 }
 
+function progSheet(w, first){
+  const p=prog(w.id), maxEp=w.eps;
+  openModal(`<h2 style="margin-top:0">${first?'どこまで読みましたか？':'読んだところを変更'}</h2>
+    <p class="muted">まだ読んでいない回の感想・タグ・見出しは、ぼかして表示します。記録はこの端末にだけ保存されます。</p>
+    <div class="row"><span>第</span><input id="pg" type="number" min="1" max="${maxEp}" inputmode="numeric" value="${p&&!p.all&&p.n?p.n:''}" style="flex:1 1 100px" aria-label="読んだ話数"><span>話まで</span><button class="pri" id="pgok">決定</button></div>
+    <div class="row" style="margin-top:10px"><button id="pgall">最新話まで全部</button><button id="pgnone">まだ読んでいない</button>${first?'<button id="pglater">あとで</button>':'<button id="pgx">閉じる</button>'}</div>`,
+  m=>{
+    const done=v=>{ setProg(w.id,v); closeModal(); render(); };
+    m.querySelector('#pgok').onclick=()=>{ const n=parseInt(m.querySelector('#pg').value,10); if(!(n>=1)) return toast('話数を入れてください'); done(n); };
+    m.querySelector('#pgall').onclick=()=>done('all');
+    m.querySelector('#pgnone').onclick=()=>done(0);
+    const l=m.querySelector('#pglater'); if(l) l.onclick=()=>done('later');
+    const x=m.querySelector('#pgx'); if(x) x.onclick=closeModal;
+  });
+}
+
+function tagSheet(w, ep){
+  const list=ep===0?WORK_TAGS:EP_TAGS, max=ep===0?MAX_WT:MAX_ET;
+  let sel=myTags(ep).filter(t=>list.includes(t));
+  const draw=m=>{ m.querySelector('#tg').innerHTML=list.map(t=>`<button type="button" class="chip pick ${sel.includes(t)?'on':''}" data-t="${esc(t)}">${esc(t)}</button>`).join(''); m.querySelector('#tgn').textContent=`${sel.length} / ${max}`;
+    m.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{ const t=b.dataset.t; if(sel.includes(t)) sel=sel.filter(x=>x!==t); else if(sel.length<max) sel.push(t); else return toast(`選べるのは${max}つまでです`); draw(m); }); };
+  openModal(`<h2 style="margin-top:0">${ep===0?'この作品のタグ':`第${ep}話のタグ`}</h2><p class="muted">当てはまるものを${max}つまで選んでください。みんなの票が多いタグほど上に表示されます。<span id="tgn"></span></p><div class="chips" id="tg"></div>
+    <div class="row" style="margin-top:12px"><button class="red" id="tgok" ${me?'':'disabled'}>保存</button><button id="tgx">閉じる</button></div>`,
+  m=>{ draw(m); m.querySelector('#tgx').onclick=closeModal;
+    m.querySelector('#tgok').onclick=async()=>{ const ref=doc(db,'tv',`${me}_${w.id}_${ep}`);
+      try{ if(sel.length) await setDoc(ref,{w:w.id,ep,by:me,tags:sel}); else await deleteDoc(ref); allTv=null; closeModal(); toast('タグを保存しました'); if(ep>0) bumpProg(w.id,ep); }catch(err){ handleErr(err); } };
+  });
+}
+
 function workView(w){
-  const st=epStats(), now=Date.now();
+  const st=epStats(), now=Date.now(), p=prog(w.id);
   const maxEp=Math.max(w.eps, ...Object.keys(st).map(Number));
   const cells=Array.from({length:maxEp},(_,i)=>{ const e=i+1, s=st[e]; const lv=!s?'':s.n>=6?'h3':s.n>=3?'h2':'h1';
-    return `<a class="ep ${lv} ${s&&now-s.last<86400000?'new':''}" href="#w-${w.id}-e-${e}" aria-label="第${e}話 感想${s?s.n:0}件">${e}<small>${s?s.n+'件':'—'}</small></a>`; }).join('');
+    return `<a class="ep ${lv} ${s&&now-s.last<86400000?'new':''} ${isRead(w.id,e)?'rd':''}" href="#w-${w.id}-e-${e}" aria-label="第${e}話 感想${s?s.n:0}件">${e}<small>${s?s.n+'件':'—'}</small></a>`; }).join('');
+  // 盛り上がった回
+  const hot={}; tvW.forEach(d=>{ if(d.ep>0) hot[d.ep]=(hot[d.ep]||0)+(d.tags||[]).filter(t=>EP_TAGS.includes(t)).length; });
+  const hotL=Object.entries(hot).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
   app.innerHTML=`<a class="back" href="#top">← 作品一覧へ</a>
   <h1>${esc(w.title)}</h1>
+  <div class="prog"><span>${progLabel(p)}</span><button type="button" id="pged">変更</button></div>
   <div class="stat"><span><b>${maxEp}</b> 話</span><span><b>${cmts.length}</b> 件の感想</span></div>
+  ${chips(countTags(tvW,0,WORK_TAGS), `<button type="button" class="chip add" id="wtag">＋ 作品タグを付ける</button>`)}
+  ${hotL.length?`<h2>盛り上がった回</h2><div class="hits">${hotL.map(([e])=>{ e=+e; const rd=isRead(w.id,e), tg=countTags(tvW,e,EP_TAGS).slice(0,3);
+     return `<a class="hit" href="#w-${w.id}-e-${e}"><b>第${e}話</b>${rd?`<span>${hlW[e]?`「${esc(hlW[e])}」 `:''}${tg.map(([t])=>'#'+esc(t)).join(' ')}</span>`:'<span class="blur">まだ読んでいない回のため非表示</span>'}</a>`; }).join('')}</div>`:''}
+  <h2>話数</h2>
   <form id="epf" class="row">
     <input id="epn" type="number" min="1" inputmode="numeric" placeholder="話数を入力してジャンプ" style="flex:1 1 180px" aria-label="話数">
     <button class="pri">開く</button>
     <button type="button" id="bump" ${me?'':'disabled'}>最新話を更新</button>
   </form>
-  <div class="legend"><span><i style="background:var(--card)"></i>感想なし</span><span><i style="background:color-mix(in srgb,var(--tone) 32%,var(--card))"></i>にぎわい中</span><span><i style="background:var(--tone)"></i>6件以上</span><span><i style="background:var(--red);border-radius:50%;border:0"></i>24時間以内に投稿</span></div>
+  <div class="legend"><span><i style="background:var(--card)"></i>感想なし</span><span><i style="background:color-mix(in srgb,var(--tone) 32%,var(--card))"></i>にぎわい中</span><span><i style="background:var(--tone)"></i>6件以上</span><span><i style="background:var(--card);box-shadow:inset 0 -4px 0 var(--red)"></i>読んだ回</span><span><i style="background:var(--red);border-radius:50%;border:0"></i>24時間以内に投稿</span></div>
   ${cmtReady==='slow'?'<div class="note">感想の読み込みに時間がかかっています。少し待つか、通信状態を確認してください。</div>':''}
   <div class="grid">${cells}</div>`;
+  $('#pged').onclick=()=>progSheet(w,false);
+  $('#wtag').onclick=()=>tagSheet(w,0);
   $('#epf').onsubmit=e=>{ e.preventDefault(); const n=parseInt($('#epn').value,10); if(n>=1) location.hash=`w-${w.id}-e-${n}`; };
   $('#bump').onclick=()=>{
     const f=$('#epf'); if(f.querySelector('#newEp')) return;
@@ -210,22 +327,42 @@ function workView(w){
     $('#saveEp').onclick=async()=>{ const n=parseInt($('#newEp').value,10); if(!(n>=w.eps&&n<=3000)) return toast(`${w.eps}〜3000で入れてください`);
       try{ await updateDoc(doc(db,'works',w.id),{eps:n}); toast(`全${n}話に更新しました`); }catch(err){ handleErr(err); } };
   };
+  if(!p && !askedProg.has(w.id)){ askedProg.add(w.id); progSheet(w,true); }
+}
+
+async function checkMyHl(w,ep){
+  const k=w.id+'_'+ep; if(k in hlMine) return; hlMine[k]='?';
+  try{ const s=await getDoc(doc(db,'hl',k)); hlMine[k]=s.exists()?(s.data().ok?'ok':'mine'):'none'; }catch(e){ hlMine[k]='taken'; }
+  if(route().v==='ep') render();
 }
 
 function epView(w, ep){
+  const maxEp=Math.max(w.eps,ep);
+  const nav=`<a class="back" href="#w-${w.id}">← ${esc(w.title)} の話数一覧</a><h1>第${ep}話</h1>
+  <div class="epnav"><a href="#w-${w.id}-e-${ep-1}" aria-disabled="${ep<=1}">← 第${Math.max(1,ep-1)}話</a><a href="#w-${w.id}-e-${ep+1}" aria-disabled="${ep>=maxEp}">第${ep+1}話 →</a></div>`;
+  if(!isRead(w.id,ep)){
+    app.innerHTML=nav+`<div class="gate"><b>まだ読んでいない回です</b><p>第${ep}話の見出し・タグ・感想にはネタバレが含まれます。${progLabel(prog(w.id))}になっています。</p>
+      <div class="row"><button class="red" id="gread">読んだので表示する</button><button id="gpeek">今回だけ見る</button><a class="back" href="#w-${w.id}">話数一覧へ戻る</a></div></div>`;
+    $('#gread').onclick=()=>{ bumpProg(w.id,ep); render(); };
+    $('#gpeek').onclick=()=>{ peek.add(w.id+'_'+ep); render(); };
+    return;
+  }
   const list=cmts.filter(c=>c.ep===ep).sort((a,b)=> sortMode==='new' ? (b.at||0)-(a.at||0) : (b.star||0)-(a.star||0)||(b.at||0)-(a.at||0));
   const rated=list.filter(c=>c.star), avg=rated.length? rated.reduce((s,c)=>s+c.star,0)/rated.length : 0;
-  const maxEp=Math.max(w.eps,ep);
-  app.innerHTML=`<a class="back" href="#w-${w.id}">← ${esc(w.title)} の話数一覧</a>
-  <h1>第${ep}話</h1>
-  <div class="epnav"><a href="#w-${w.id}-e-${ep-1}" aria-disabled="${ep<=1}">← 第${Math.max(1,ep-1)}話</a><a href="#w-${w.id}-e-${ep+1}" aria-disabled="${ep>=maxEp}">第${ep+1}話 →</a></div>
+  const hk=w.id+'_'+ep, hs=hlMine[hk];
+  if(!hlW[ep]) checkMyHl(w,ep);
+  const hlBox = hlW[ep] ? `<p class="hl">「${esc(hlW[ep])}」</p>`
+    : hs==='mine'||hs==='taken' ? `<p class="muted">見出しは提案済みで、確認待ちです。</p>`
+    : hs==='none' ? `<form id="hlf" class="row hlf"><input id="hlt" maxlength="30" placeholder="見出しを提案(例: 〇〇vs△△)" aria-label="見出し"><button ${me?'':'disabled'}>提案</button></form><p class="muted" style="margin-top:4px">見出しは管理者が確認してから表示されます。</p>` : '';
+  app.innerHTML=nav+`${hlBox}
   <div class="stat"><span><b>${list.length}</b> 件</span>${rated.length?`<span class="stars">${starStr(Math.round(avg))}</span><span class="muted">平均 ${avg.toFixed(1)}(${rated.length}人)</span>`:'<span class="muted">まだ評価なし</span>'}</div>
+  ${chips(countTags(tvW,ep,EP_TAGS), `<button type="button" class="chip add" id="etag">＋ この回にタグを付ける</button>`)}
   <form class="post" id="pf">
     <label for="tx" style="font-weight:700">第${ep}話の感想を書く</label>
     <input id="nm" maxlength="20" placeholder="ニックネーム(空欄なら「名無しの読者」)" value="${esc(ls.get('nick'))}" aria-label="ニックネーム">
     <div class="starpick" role="group" aria-label="評価">${[1,2,3,4,5].map(i=>`<button type="button" data-s="${i}" class="${i<=draftStar?'on':''}" aria-label="${i}つ星">★</button>`).join('')}<span class="muted" style="align-self:center;margin-left:6px">${draftStar?draftStar+'つ星(もう一度押すと解除)':'評価は任意'}</span></div>
     <textarea id="tx" maxlength="1000" placeholder="この話のどこが良かった？ 気になった展開は？"></textarea>
-    <div class="row"><label class="chk"><input type="checkbox" id="sp">ネタバレを含む(ぼかして表示)</label><button class="red" style="margin-left:auto" ${me?'':'disabled'}>投稿する</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="sp">この先の話のネタバレを含む(ぼかして表示)</label><button class="red" style="margin-left:auto" ${me?'':'disabled'}>投稿する</button></div>
   </form>
   <div class="sort" role="group" aria-label="並び替え"><button data-m="new" class="${sortMode==='new'?'on':''}">新しい順</button><button data-m="star" class="${sortMode==='star'?'on':''}">評価が高い順</button></div>
   ${!cmtReady?'<p class="muted">感想を読み込み中…</p>':cmtReady==='slow'?'<div class="note">感想の読み込みに時間がかかっています。</div>':''}
@@ -234,6 +371,10 @@ function epView(w, ep){
     return `<li class="bub ${sp?'spo':''}" data-id="${c.id}"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b>${c.star?`<span class="stars">${starStr(c.star)}</span>`:''}<span>${ago(c.at||0)}</span>${c.sp?'<span class="tag">ネタバレ</span>':''}${c.by===me?`<button class="del" data-del="${c.id}">削除</button>`:''}</div><p ${sp?'title="タップで表示"':''}>${esc(c.text)}</p></li>`; }).join('')}</ul>`;
   const tx=$('#tx'); tx.value=ls.get('d:'+w.id+':'+ep);
   tx.oninput=()=>ls.set('d:'+w.id+':'+ep,tx.value);
+  $('#etag').onclick=()=>tagSheet(w,ep);
+  const hf=$('#hlf'); if(hf) hf.onsubmit=async e=>{ e.preventDefault(); const t=$('#hlt').value.trim(); if(!t) return toast('見出しを入れてください');
+    try{ await setDoc(doc(db,'hl',hk),{w:w.id,ep,text:t.slice(0,30),by:me,ok:false,at:serverTimestamp()}); hlMine[hk]='mine'; toast('提案しました。確認後に表示されます'); epView(w,ep); }
+    catch(err){ hlMine[hk]='taken'; toast('すでに提案されています'); epView(w,ep); } };
   app.querySelectorAll('.starpick button').forEach(b=>b.onclick=()=>{ const s=+b.dataset.s; draftStar= draftStar===s?0:s; const v=tx.value, n=$('#nm').value; epView(w,ep); $('#tx').value=v; $('#nm').value=n; });
   app.querySelectorAll('.sort button').forEach(b=>b.onclick=()=>{ sortMode=b.dataset.m; epView(w,ep); });
   app.querySelectorAll('.spo p').forEach(p=>p.onclick=()=>{ revealed.add(p.closest('li').dataset.id); epView(w,ep); });
@@ -247,7 +388,7 @@ function epView(w, ep){
     const btn=e.target.querySelector('.red'); btn.disabled=true;
     try{
       await addDoc(collection(db,'c'),{w:w.id,ep,text:text.slice(0,1000),star:draftStar,sp:$('#sp').checked,name,by:me,at:serverTimestamp()});
-      ls.set('d:'+w.id+':'+ep,''); draftStar=0; toast('投稿しました');
+      ls.set('d:'+w.id+':'+ep,''); draftStar=0; bumpProg(w.id,ep); toast('投稿しました');
       await updateDoc(doc(db,'works',w.id),{n:increment(1),last:serverTimestamp(), ...(ep>w.eps?{eps:ep}:{})}).catch(()=>{});
     }catch(err){ handleErr(err); btn.disabled=false; }
   };
@@ -272,17 +413,14 @@ const ymd=()=>{ const d=new Date(); return d.getFullYear()+String(d.getMonth()+1
 let trackQ=[];
 function track(){
   if(!me){ trackQ.push(1); return; }
-  const r=route(), day=ymd(), wid=(r.v!=='home'&&/^[A-Za-z0-9_-]+$/.test(r.id))?r.id:null;
+  const r=route(), day=ymd(), wid=((r.v==='work'||r.v==='ep')&&/^[A-Za-z0-9_-]+$/.test(r.id))?r.id:null;
   const first=ls.get('vd')!==day; if(first) ls.set('vd',day);
   const data={pv:increment(1)}; if(first) data.uv=increment(1); if(wid) data.w={[wid]:increment(1)};
   setDoc(doc(db,'stats','d-'+day),data,{merge:true}).catch(()=>{});
 }
-window.addEventListener('hashchange',()=>{ window.scrollTo(0,0); draftStar=0; render(); if(db) track(); });
+window.addEventListener('hashchange',()=>{ window.scrollTo(0,0); draftStar=0; closeModal(); render(); if(db) track(); });
 
-if(firebaseConfig.projectId==='ここに貼る'){
-  setupErr='Firebaseの設定がまだ入っていません。index.html の firebaseConfig を自分のプロジェクトの値に書き換えてください。';
-  render();
-} else {
+{
   const fb=initializeApp(firebaseConfig);
   db=getFirestore(fb);
   const auth=getAuth(fb);
@@ -295,10 +433,10 @@ if(firebaseConfig.projectId==='ここに貼る'){
   onSnapshot(collection(db,'works'), s=>{
     works=s.docs.map(d=>{ const x=d.data(); return {id:d.id,...x,at:ms(x.at),last:x.last?ms(x.last):0}; });
     worksReady=true; worksErr=''; clearTimeout(tm); render();
-  }, e=>{ clearTimeout(tm); worksReady=true; worksErr='作品一覧を読み込めませんでした。Firestoreのルールが公開されているか確認してください。'; render(); });
+  }, e=>{ clearTimeout(tm); worksReady=true; worksErr='作品一覧を読み込めませんでした。'; render(); });
+  getDocs(query(collection(db,'hl'),where('ok','==',true))).then(s=>{ allHl=s.docs.map(d=>d.data()); if(route().v==='home'&&q) render(); }).catch(()=>{});
   render();
 }
-
 </script>
 </body>
 </html>
