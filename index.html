@@ -118,6 +118,8 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 .hit.bm{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}.hit.bm a{color:var(--ink);text-decoration:none}
 .go{color:var(--red)!important;font-weight:700;text-decoration:none}
 .bmbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:4px 0 8px}
+.buy{border:2px solid var(--line);border-radius:8px;background:var(--card);padding:10px 12px;margin:14px 0}.buy .chips{margin:6px 0 0}.buy.sm{margin-top:28px}
+.pr{display:inline-block;border:1px solid var(--sub);color:var(--sub);border-radius:3px;font-size:11px;padding:0 5px;margin-right:8px;font-weight:700}
 .jo{background:var(--soft);border-radius:8px;padding:10px 12px;font-size:14px;margin:0 0 12px}.jo a{color:var(--red);font-weight:700}
 </style>
 </head>
@@ -145,6 +147,9 @@ const WORK_TAGS = ['覚醒','成り上がり','復讐','異世界','転生','バ
 const EP_TAGS   = ['クライマックス','涙腺崩壊','覚醒','名バトル','伏線回収','胸アツ','神作画','ざまぁ','衝撃展開','胸キュン','爆笑','鬱展開'];
 const APPS      = ['ピッコマ','LINEマンガ','めちゃコミック','コミックシーモア','ebookjapan','マンガワン','少年ジャンプ+','マガポケ','サイコミ','comico','Kindle','紙の単行本','その他'];
 const MAX_WT = 5, MAX_ET = 3, MAX_APP = 3;   // 1人が選べる数(作品タグ / 話タグ / 読んだアプリ)
+// 楽天アフィリエイトID(楽天アフィリエイトの「リンク作成」画面などに出る xxxxxxxx.xxxxxxxx.xxxxxxxx.xxxxxxxx の形)
+// 空欄のあいだは、購入リンクを表示しません
+const RAKUTEN_AFF_ID = '';
 // ===========================================================
 const ALL_TAGS = [...new Set([...WORK_TAGS, ...EP_TAGS])];
 
@@ -208,6 +213,17 @@ function watchWork(id){
 // タグ集計
 const countTags = (docs,ep,list) => { const m={}; docs.forEach(d=>{ if(d.ep===ep) (d.tags||[]).forEach(t=>{ if(list.includes(t)) m[t]=(m[t]||0)+1; }); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
 const myTags = ep => (tvW.find(d=>d.by===me && d.ep===ep)||{}).tags||[];
+// 楽天の購入リンク(PR表記つき)
+const rkLink = url => `https://hb.afl.rakuten.co.jp/hgc/${RAKUTEN_AFF_ID}/?pc=${encodeURIComponent(url)}&m=${encodeURIComponent(url)}`;
+const buyBox = (w, small) => {
+  if(!/^[0-9a-f]{8}(\.[0-9a-f]{8}){3}$/i.test(RAKUTEN_AFF_ID)) return '';
+  const kw=encodeURIComponent(w.title);
+  const books=rkLink(`https://books.rakuten.co.jp/search?sitem=${kw}`);
+  const kobo=rkLink(`https://books.rakuten.co.jp/search?sitem=${kw}&g=101`);
+  return `<div class="buy${small?' sm':''}"><span class="pr">PR</span><span class="muted">${small?'続きが気になったら':'単行本・電子書籍で読む'}</span>
+    <div class="chips"><a class="chip" href="${books}" target="_blank" rel="sponsored noopener">楽天ブックスで探す</a><a class="chip" href="${kobo}" target="_blank" rel="sponsored noopener">楽天Koboで探す</a></div>
+    <p class="muted" style="margin:2px 0 0;font-size:12px">楽天アフィリエイトのリンクです。購入されると運営者に紹介料が入ります。</p></div>`;
+};
 const chips = (arr,more='') => arr.length ? `<div class="chips">${arr.map(([t,n])=>`<a class="chip" href="#t-${ALL_TAGS.indexOf(t)}">${esc(t)}<small>${n}</small></a>`).join('')}${more}</div>` : more?`<div class="chips">${more}</div>`:'';
 
 function render(){
@@ -398,6 +414,7 @@ function workView(w){
   <div class="stat"><span><b>${maxEp}</b> 話</span><span><b>${cmts.length}</b> 件の感想</span></div>
   ${chips(countTags(tvW,0,WORK_TAGS), `<button type="button" class="chip add" id="wtag">＋ 作品タグを付ける</button>`)}
   <div class="apps"><span class="muted">読まれているアプリ</span><div class="chips">${countApps(raW).map(([a,n])=>`<a class="chip" href="#a-${APPS.indexOf(a)}">${esc(a)}<small>${n}人</small></a>`).join('')}<button type="button" class="chip add" id="wapp">${myApps().length?'✎ 自分の読んだアプリを変更':'＋ 読んだアプリを選ぶ'}</button></div></div>
+  ${buyBox(w)}
   ${bms(w.id).length?`<h2>あなたのしおり</h2><div class="hits">${bms(w.id).map(b=>`<div class="hit bm"><a href="#w-${w.id}-e-${b.ep}"><b>第${b.ep}話${hlW[b.ep]?`「${esc(hlW[b.ep])}」`:''}</b></a>${b.memo?`<span>${esc(b.memo)}</span>`:''}<a class="go" href="#w-${w.id}-e-${b.from}">▶ 第${b.from}話から読む</a></div>`).join('')}</div>`:''}
   ${hotL.length?`<h2>盛り上がった回</h2><div class="hits">${hotL.map(([e])=>{ e=+e; const rd=isRead(w.id,e), tg=countTags(tvW,e,EP_TAGS).slice(0,3);
      return `<a class="hit" href="#w-${w.id}-e-${e}"><b>第${e}話</b>${rd?`<span>${hlW[e]?`「${esc(hlW[e])}」 `:''}${tg.map(([t])=>'#'+esc(t)).join(' ')}</span>`:'<span class="blur">まだ読んでいない回のため非表示</span>'}</a>`; }).join('')}</div>`:''}
@@ -464,7 +481,8 @@ function epView(w, ep){
   ${!cmtReady?'<p class="muted">感想を読み込み中…</p>':cmtReady==='slow'?'<div class="note">感想の読み込みに時間がかかっています。</div>':''}
   ${cmtReady===true&&!list.length?'<div class="note">まだ感想がありません。最初のひとことをどうぞ。</div>':''}
   <ul class="cmts">${list.map(c=>{ const sp=c.sp&&!revealed.has(c.id);
-    return `<li class="bub ${sp?'spo':''}" data-id="${c.id}"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b>${c.star?`<span class="stars">${starStr(c.star)}</span>`:''}<span>${ago(c.at||0)}</span>${c.sp?'<span class="tag">ネタバレ</span>':''}${c.by===me?`<button class="del" data-del="${c.id}">削除</button>`:''}</div><p ${sp?'title="タップで表示"':''}>${esc(c.text)}</p></li>`; }).join('')}</ul>`;
+    return `<li class="bub ${sp?'spo':''}" data-id="${c.id}"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b>${c.star?`<span class="stars">${starStr(c.star)}</span>`:''}<span>${ago(c.at||0)}</span>${c.sp?'<span class="tag">ネタバレ</span>':''}${c.by===me?`<button class="del" data-del="${c.id}">削除</button>`:''}</div><p ${sp?'title="タップで表示"':''}>${esc(c.text)}</p></li>`; }).join('')}</ul>
+  ${buyBox(w,true)}`;
   const tx=$('#tx'); tx.value=ls.get('d:'+w.id+':'+ep);
   tx.oninput=()=>ls.set('d:'+w.id+':'+ep,tx.value);
   $('#etag').onclick=()=>tagSheet(w,ep);
