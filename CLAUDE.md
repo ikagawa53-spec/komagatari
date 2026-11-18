@@ -21,8 +21,8 @@
 
 ## ファイル構成
 - `index.html` … 本体。HTML/CSS/JSが1ファイル。Firebase SDK 10.12.2 を gstatic からESMで読み込み。画面はURLの#で切り替えるSPA。
-- `stats.html` … 管理画面（閲覧数グラフ、人気作品、最近の感想の削除、見出しの承認／却下）。
-- `sw.js` … Service Worker（PWA）。**ファイルを変更したら必ず `CACHE` の番号を1つ上げる**（現在 `komagatari-v6`）。上げないと利用者の画面が古いまま残る。
+- `stats.html` … 管理画面（閲覧数グラフ、人気作品、最近の感想の削除、見出しの承認／却下、作品の削除）。
+- `sw.js` … Service Worker（PWA）。**ファイルを変更したら必ず `CACHE` の番号を1つ上げる**（現在 `komagatari-v7`）。上げないと利用者の画面が古いまま残る。
 - `manifest.webmanifest`、`icon-192.png`、`icon-512.png`、`icon-maskable-512.png`、`apple-touch-icon.png` … ホーム画面追加用。
 - `firestore.rules` … Firestoreルールの控え。**本番への反映はユーザーがFirebaseコンソールに手で貼る**。公開リポジトリなので管理者メールは `ADMIN_EMAIL` に伏せてある。ルールを渡すときは、ユーザーに実際の管理者Gmailへ置き換えてもらう（またはチャットで本人に確認して置き換えた全文を渡す）。
 

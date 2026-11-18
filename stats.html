@@ -68,7 +68,7 @@ form.post{background:var(--card);border:3px solid var(--line);border-radius:4px;
 .bub p{margin:0;white-space:pre-wrap;word-break:break-word}
 .spo p{filter:blur(6px);user-select:none;cursor:pointer}
 .spo .tag{background:var(--red);color:#fff;border-radius:4px;padding:0 6px;font-weight:700}
-.del{margin-left:auto;min-height:32px;padding:0 10px;font-size:13px;border-width:1px}
+.del,.wdel{margin-left:auto;min-height:32px;padding:0 10px;font-size:13px;border-width:1px}
 .sort{display:flex;gap:6px;margin-top:20px}
 .sort button{min-height:36px;font-size:13px;padding:0 12px}
 .sort button.on{background:var(--ink);color:var(--bg)}
@@ -87,7 +87,7 @@ main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 .bars{display:grid;gap:6px}.br{display:grid;grid-template-columns:44px 1fr 92px;gap:8px;align-items:center;font-size:14px}
 .br i{height:16px;background:var(--soft);display:block}.br em{display:block;height:100%;background:var(--red)}
 .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.n small{color:var(--sub)}
-.tp{padding-left:22px}.tp li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--soft)}.tp a,.bub a{color:var(--ink)}
+.tp{padding-left:22px}.tp li{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--soft)}.tp a,.bub a{color:var(--ink)}
 .hq{display:grid;gap:10px}.hqi{border:2px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:8px;background:var(--card)}.hqi a{color:var(--ink);font-weight:700}
 </style></head><body>
 <header><div class="hd"><a class="logo" href="./"><i></i>コマ語り</a><small>管理画面</small></div></header>
@@ -135,12 +135,17 @@ async function load(u){
   <h2>過去14日の閲覧数</h2><div class="bars">${days.map(d=>{const x=S[key(d)]||{};return `<div class="br"><span>${d.getMonth()+1}/${d.getDate()}</span><i><em style="width:${(x.pv||0)/max*100}%"></em></i><span class="n">${x.pv||0}<small> / ${x.uv||0}人</small></span></div>`}).join('')}</div>
   <p class="muted">閲覧数 / 訪問者数(1日1人1回で数えます)</p>
   <h2>よく見られた作品(7日間)</h2>${top.length?`<ol class="tp">${top.map(([k,v])=>`<li><a href="./#w-${esc(k)}">${esc(W[k]?.title||'(削除済み)')}</a><span class="n">${v}回</span></li>`).join('')}</ol>`:'<div class="note">まだデータがありません。</div>'}
-  <h2>最近の感想(30件)</h2><ul class="cmts">${cs.docs.map(d=>{const c=d.data();return `<li class="bub"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b><a href="./#w-${esc(c.w)}-e-${c.ep}">${esc(W[c.w]?.title||'?')} 第${c.ep}話</a><span>${ms(c.at)?new Date(ms(c.at)).toLocaleString('ja-JP'):''}</span><button class="del" data-id="${d.id}" data-w="${esc(c.w)}">削除</button></div><p>${esc(c.text)}</p></li>`}).join('')||'<div class="note">まだ感想がありません。</div>'}</ul>`;
+  <h2>最近の感想(30件)</h2><ul class="cmts">${cs.docs.map(d=>{const c=d.data();return `<li class="bub"><div class="meta"><b>${esc(c.name||'名無しの読者')}</b><a href="./#w-${esc(c.w)}-e-${c.ep}">${esc(W[c.w]?.title||'?')} 第${c.ep}話</a><span>${ms(c.at)?new Date(ms(c.at)).toLocaleString('ja-JP'):''}</span><button class="del" data-id="${d.id}" data-w="${esc(c.w)}">削除</button></div><p>${esc(c.text)}</p></li>`}).join('')||'<div class="note">まだ感想がありません。</div>'}</ul>
+  <h2>作品の削除(${ws.size}件)</h2><p class="muted">新しく登録された順。「削除」を押すと「本当に削除」に変わるので、もう一度押すと消えます。</p><ol class="tp">${ws.docs.slice().sort((a,b)=>ms(b.data().at)-ms(a.data().at)).map(d=>{const w=d.data();return `<li><a href="./#w-${esc(d.id)}">${esc(w.title)}</a><span class="n">全${w.eps}話・感想${w.n||0}件${ms(w.at)?'・'+new Date(ms(w.at)).toLocaleDateString('ja-JP'):''}</span><button class="wdel" data-id="${esc(d.id)}">削除</button></li>`}).join('')}</ol>`;
   app.querySelectorAll('.hqi').forEach(el=>{ const id=el.dataset.id;
     el.querySelector('.ok').onclick=async()=>{ const t=el.querySelector('input').value.trim().slice(0,30); if(!t) return toast('見出しが空です'); try{ await updateDoc(doc(db,'hl',id),{text:t,ok:true}); el.remove(); toast('承認しました'); }catch(e){ toast('保存できませんでした'); } };
     el.querySelector('.ng').onclick=async()=>{ try{ await deleteDoc(doc(db,'hl',id)); el.remove(); toast('却下しました'); }catch(e){ toast('削除できませんでした'); } };
   });
   $('#rl').onclick=()=>load(u); $('#lo').onclick=()=>signOut(auth);
+  app.querySelectorAll('.wdel').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='本当に削除';b.classList.add('red');return;}
+    try{ await deleteDoc(doc(db,'works',b.dataset.id)); b.closest('li').remove(); toast('作品を削除しました'); }catch(e){ toast('削除できませんでした'); }
+  });
   app.querySelectorAll('.del').forEach(b=>b.onclick=async()=>{
     if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='本当に削除';b.classList.add('red');return;}
     try{ await deleteDoc(doc(db,'c',b.dataset.id)); await updateDoc(doc(db,'works',b.dataset.w),{n:increment(-1)}).catch(()=>{}); b.closest('li').remove(); toast('削除しました'); }catch(e){ toast('削除できませんでした'); }
